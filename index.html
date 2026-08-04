@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thang Khuat — Cloud &amp; DevSecOps</title>
+<meta name="description" content="Thang Khuat — Computer Science graduate (Cybersecurity major), building AWS infrastructure with Terraform. Formerly a Registered Nurse specialising in anaesthetics.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F3F5F4;
+    --surface: #FFFFFF;
+    --ink: #12181A;
+    --ink-muted: #5B6663;
+    --accent: #2F6E62;
+    --accent-soft: #E3EEEC;
+    --line: #D9E0DD;
+    --max: 880px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { animation: none !important; transition: none !important; }
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  .wrap {
+    max-width: var(--max);
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  section { padding: clamp(48px, 8vw, 96px) 0; }
+  section + section { border-top: 1px solid var(--line); }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 16px;
+  }
+
+  h1, h2, h3 { font-family: 'IBM Plex Mono', monospace; margin: 0; }
+
+  /* ---------- Hero ---------- */
+  .hero { padding-top: clamp(56px, 10vw, 120px); }
+  .hero h1 {
+    font-size: clamp(36px, 6vw, 56px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .hero .role {
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--ink-muted);
+    font-size: clamp(14px, 2vw, 16px);
+    margin-top: 10px;
+  }
+  .hero .lede {
+    max-width: 60ch;
+    margin: 28px 0 0;
+    font-size: 18px;
+    color: var(--ink);
+  }
+  .trace-wrap { margin: 40px 0 8px; }
+  .trace-wrap svg { width: 100%; height: auto; display: block; }
+  .trace-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    fill: var(--ink-muted);
+  }
+  .trace-label.pivot { fill: var(--ink); font-weight: 600; }
+
+  .cta-row { display: flex; gap: 16px; margin-top: 32px; flex-wrap: wrap; }
+  .btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    padding: 12px 20px;
+    border-radius: 4px;
+    border: 1px solid var(--ink);
+  }
+  .btn.primary { background: var(--ink); color: var(--bg); }
+  .btn.primary:hover { background: var(--accent); border-color: var(--accent); text-decoration: none; }
+  .btn.secondary { color: var(--ink); border-color: var(--line); }
+  .btn.secondary:hover { border-color: var(--ink); text-decoration: none; }
+
+  /* ---------- About ---------- */
+  .about p { max-width: 68ch; margin: 0 0 18px; }
+  .about p:last-child { margin-bottom: 0; }
+
+  /* ---------- Skills ---------- */
+  .skill-groups {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+  }
+  .skill-group h3 {
+    font-size: 14px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 14px;
+    font-weight: 500;
+  }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 6px 12px;
+    border-radius: 4px;
+  }
+
+  /* ---------- Project ---------- */
+  .project-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: clamp(24px, 4vw, 40px);
+  }
+  .project-card h2 { font-size: 22px; margin-bottom: 14px; }
+  .project-card p { max-width: 62ch; color: var(--ink); }
+  .stack-row {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin: 20px 0 24px;
+  }
+  .stack-row span {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-muted);
+    border: 1px solid var(--line);
+    padding: 5px 10px;
+    border-radius: 4px;
+  }
+  .project-links { display: flex; gap: 20px; font-family: 'IBM Plex Mono', monospace; font-size: 14px; }
+
+  /* ---------- Path (timeline) ---------- */
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before {
+    content: ''; position: absolute; left: 5px; top: 6px; bottom: 6px;
+    width: 1px; background: var(--line);
+  }
+  .tl-item { position: relative; padding-bottom: 36px; }
+  .tl-item:last-child { padding-bottom: 0; }
+  .tl-item::before {
+    content: ''; position: absolute; left: -28px; top: 5px;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--accent); border: 2px solid var(--bg);
+  }
+  .tl-item.current::before { background: var(--ink); }
+  .tl-role { font-weight: 600; font-size: 16px; font-family: 'IBM Plex Sans', sans-serif; }
+  .tl-meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    color: var(--ink-muted);
+    margin: 3px 0 8px;
+  }
+  .tl-item p { margin: 0; max-width: 60ch; color: var(--ink); }
+
+  /* ---------- Contact ---------- */
+  .contact-lines { font-family: 'IBM Plex Mono', monospace; font-size: 15px; line-height: 2; }
+  .contact-lines .loc { color: var(--ink-muted); font-family: 'IBM Plex Sans', sans-serif; margin-bottom: 14px; }
+
+  footer {
+    text-align: center;
+    padding: 28px 0 40px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+
+  @media (max-width: 640px) {
+    .skill-groups { grid-template-columns: 1fr; gap: 24px; }
+    .cta-row { flex-direction: column; }
+    .btn { text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<section class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Cloud &amp; DevSecOps</p>
+    <h1>Thang Khuat</h1>
+    <p class="role">Computer Science Graduate (Distinction) · Cybersecurity Major · Ex-Registered Nurse</p>
+    <p class="lede">Five years keeping patients stable in surgery. Now keeping infrastructure stable in the cloud.</p>
+
+    <div class="trace-wrap" aria-hidden="true">
+      <svg viewBox="0 0 1000 140" xmlns="http://www.w3.org/2000/svg">
+        <polyline points="0,70 10,70 20,63 30,70 40,70 48,15 54,128 60,70 72,60 82,70 120,70 130,70 140,63 150,70 160,70 168,15 174,128 180,70 192,60 202,70 240,70 250,70 260,63 270,70 280,70 288,15 294,128 300,70 312,60 322,70 360,70 400,70"
+          fill="none" stroke="var(--ink-muted)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+        <polyline points="400,70 440,60 470,63 500,46 540,50 580,32 620,36 660,18 700,22 740,8 780,12 820,4 860,9 900,3 940,7 980,2 1000,5"
+          fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+        <circle cx="400" cy="70" r="5" fill="var(--accent)"/>
+        <circle cx="1000" cy="5" r="5" fill="var(--accent)"/>
+        <text x="180" y="118" text-anchor="middle" class="trace-label">NURSING — 5+ YRS</text>
+        <text x="400" y="118" text-anchor="middle" class="trace-label pivot">→ RMIT CYBERSECURITY</text>
+        <text x="900" y="118" text-anchor="middle" class="trace-label">DEVOPS / CLOUD — NOW</text>
+      </svg>
+    </div>
+
+    <div class="cta-row">
+      <a href="#project" class="btn primary">View This Project</a>
+      <a href="#contact" class="btn secondary">Get In Touch</a>
+    </div>
+  </div>
+</section>
+
+<section class="about">
+  <div class="wrap">
+    <p class="eyebrow">The Pivot</p>
+    <p>For five years, I worked as a Registered Nurse specialising in anaesthetics — reading vitals, following protocol, and making fast decisions where the cost of error is real. That background isn't a detour into tech. It's direct preparation for it.</p>
+    <p>Compliance under pressure, precision in high-stakes environments, and ownership when things go wrong — these translate directly to cybersecurity and infrastructure work, where the same instincts protect systems instead of patients.</p>
+    <p>I'm now a Computer Science graduate from RMIT University (Distinction, Cybersecurity major), building toward DevOps and cloud security roles — with Terraform, AWS, and secure-by-design infrastructure as my current focus.</p>
+  </div>
+</section>
+
+<section class="skills">
+  <div class="wrap">
+    <p class="eyebrow">Stack</p>
+    <div class="skill-groups">
+      <div class="skill-group">
+        <h3>Cloud &amp; Infrastructure</h3>
+        <div class="chip-row">
+          <span class="chip">AWS</span>
+          <span class="chip">Terraform</span>
+          <span class="chip">IAM</span>
+          <span class="chip">Git</span>
+        </div>
+      </div>
+      <div class="skill-group">
+        <h3>Security</h3>
+        <div class="chip-row">
+          <span class="chip">Cybersecurity Fundamentals</span>
+          <span class="chip">Data Privacy &amp; Compliance</span>
+          <span class="chip">Secure Architecture</span>
+        </div>
+      </div>
+      <div class="skill-group">
+        <h3>Foundations</h3>
+        <div class="chip-row">
+          <span class="chip">Python</span>
+          <span class="chip">Java</span>
+          <span class="chip">C++</span>
+          <span class="chip">Databases</span>
+          <span class="chip">Networking</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="project">
+  <div class="wrap">
+    <p class="eyebrow">Project — This Site</p>
+    <div class="project-card">
+      <h2>This site is the first project.</h2>
+      <p>Every part of what you're looking at — the domain, the CDN, the certificate, the storage — is provisioned entirely through Terraform on AWS. No console clicking. The infrastructure is the portfolio piece, not just what it hosts.</p>
+      <div class="stack-row">
+        <span>Route 53</span>
+        <span>CloudFront</span>
+        <span>ACM</span>
+        <span>S3</span>
+        <span>IAM</span>
+      </div>
+      <div class="project-links">
+        <a href="https://github.com/thangkhuat" target="_blank" rel="noopener">View the code on GitHub →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="path">
+  <div class="wrap">
+    <p class="eyebrow">Path</p>
+    <div class="timeline">
+      <div class="tl-item">
+        <p class="tl-role">Personal Care Assistant</p>
+        <p class="tl-meta">Mekong Cairnlea Vietnamese Aged Care · Nov 2018 – Feb 2021</p>
+        <p>Supported elderly residents with individualised, adaptive care. Maintained accurate records in coordination with care teams.</p>
+      </div>
+      <div class="tl-item">
+        <p class="tl-role">Registered Nurse, Anaesthetics</p>
+        <p class="tl-meta">The Avenue Hospital · Feb 2021 – Present</p>
+        <p>Delivered accurate patient care in high-pressure surgical settings. Handled sensitive patient data under strict compliance standards.</p>
+      </div>
+      <div class="tl-item">
+        <p class="tl-role">BSc Computer Science (Distinction)</p>
+        <p class="tl-meta">RMIT University · Cybersecurity Major</p>
+        <p>Graduated with a focus on cybersecurity, networking, and secure systems design.</p>
+      </div>
+      <div class="tl-item current">
+        <p class="tl-role">Cloud &amp; DevSecOps — building in public</p>
+        <p class="tl-meta">Present</p>
+        <p>Provisioning AWS infrastructure with Terraform. Open to DevOps, cloud, and cybersecurity roles.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contact">
+  <div class="wrap">
+    <p class="eyebrow">Contact</p>
+    <p class="contact-lines loc">Melbourne, Australia</p>
+    <div class="contact-lines">
+      <div><a href="mailto:huuthang.khuat21@gmail.com">huuthang.khuat21@gmail.com</a></div>
+      <div><a href="https://github.com/thangkhuat" target="_blank" rel="noopener">github.com/thangkhuat</a></div>
+      <div><a href="https://www.linkedin.com/in/thang-khuat-690117273/" target="_blank" rel="noopener">linkedin.com/in/thang-khuat</a></div>
+    </div>
+  </div>
+</section>
+
+<footer>Built with Terraform on AWS · thangkhuat.dev</footer>
+
+</body>
+</html>
