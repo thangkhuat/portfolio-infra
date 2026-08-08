@@ -110,3 +110,20 @@ Architecture Decision Records (ADRs) for this project. Each entry captures a cho
 **Decision:** `geo_restriction.restriction_type = "none"`.
 
 **Reasoning:** The audience is recruiters and hiring managers globally — no legal or business reason to block any region.
+
+---
+
+### ADR-009 — Stop at Phase 1; build, verify, then tear down Phase 2
+**Status:** Accepted
+
+**Context:** Phase 2 (VPC, subnets, security groups, ALB, RDS-ready networking) was fully built and confirmed working end-to-end, routing `/api/*` through CloudFront to a live ALB. Compute and RDS were the only pieces left before it would incur its full ongoing cost.
+
+**Alternatives considered:**
+- Deploy compute + RDS and keep the whole stack running continuously
+- Deploy compute + RDS but only run it during active job-hunting/demo periods
+
+**Decision:** Destroy all 26 Phase 2 resources. Declare Phase 1 the complete, live project. Treat Phase 2's revised scope (serving the project list dynamically from a database) as a documented but unstarted potential feature, not an active roadmap item.
+
+**Reasoning:** The ALB alone costs ~$16–22/month with zero free-tier coverage, regardless of traffic — a fixed cost with no revenue or real usage to justify it right now. The original Phase 2 purpose (contact form, blog) was also reconsidered as genuinely unnecessary for this site. Keeping the built-but-unused infrastructure running would be paying to demonstrate a skill that's already been demonstrated and documented — the working code and this decision log serve that purpose without the ongoing cost.
+
+**Trade-offs accepted:** Resuming later means rebuilding the VPC/subnet/security-group layer from scratch (all 26 resources were destroyed, not just the compute/RDS pieces) — accepted since none of it cost anything to leave running, but wasn't preserved due to how the teardown was scoped. Full working Terraform for this layer remains in Git history regardless.
