@@ -73,3 +73,30 @@ One entry per working session: what was covered conceptually, what was actually 
 - Push the project to an actual GitHub repo — the site's own "View the code on GitHub" link currently points at the GitHub profile as a placeholder
 - Add graduation date to the site's timeline (currently unspecified)
 - Move to Phase 2 pre-quiz (dynamic backend: VPC, compute, RDS) when ready
+
+---
+
+## Session 3 — 8 Aug 2026 — Project marked complete
+
+### Conceptual coverage
+- VPC, public/private subnets, CIDR notation (`/24` vs `/16`), Internet Gateway + route tables as the actual mechanism behind "public"
+- Security Groups: identity-reference rules vs. IP/CIDR rules, stateful behavior, circular dependency between inline SG rules and the fix (separate `aws_vpc_security_group_ingress_rule`/`egress_rule` resources)
+- ALB, target groups, listeners — re-explained via the "nurse / roster / instructions" split; empty target group vs. health-check config are separate things
+- CloudFront multi-origin routing (`ordered_cache_behavior`, `custom_origin_config`), and why the ALB needed its own *regional* ACM cert distinct from CloudFront's `us-east-1` one
+- AWS managed prefix lists (`com.amazonaws.global.cloudfront.origin-facing`) to restrict the ALB to CloudFront traffic only, plus the custom-header-secret pattern (flagged for Phase 4, not built)
+- VM vs. container internals (guest OS vs. shared kernel) — revisited multiple times before it landed
+- Real AWS costs: ALB has no free tier and runs ~$16–22/month fixed; RDS/EC2 do have a 12-month free tier; Fargate does not
+
+### What was built
+- Full Phase 2 networking layer: VPC, 4 subnets (2 public/2 private, 2 AZs), IGW, public/private route tables, 3 security groups with 5 reference-based rules, ALB + listener + target group, a second regional ACM cert, CloudFront updated to route `/api/*` to the ALB via a managed-prefix-list-restricted origin
+- Verified working end-to-end via `terraform plan`/`apply` at each step
+- All 26 Phase 2 resources destroyed via `terraform destroy` (ADR-009) — compute and RDS were never deployed
+
+### Decisions made
+- Reconsidered and dropped the original Phase 2 purpose (contact form, blog) — genuinely unnecessary for this site
+- CloudFront-to-ALB origin traffic kept encrypted (`https-only`) rather than plain HTTP — a deliberate security choice, at the cost of needing a second certificate
+- Declared Phase 1 the complete, finished project. Phase 2 explored and validated but not deployed. Phases 3–4 reframed as potential future features, not an active roadmap
+- All docs (`README.md`, `functional-requirements.md`, `technical-requirements.md`, `decision-log.md`, `phase-1-report.md`) updated to reflect this final status
+
+### Open items / next steps
+None currently active. If revenue or real traffic ever justifies it, Phase 2's Terraform code is preserved in Git history and can be reapplied.

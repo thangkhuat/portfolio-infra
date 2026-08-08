@@ -1,6 +1,6 @@
 # Personal Portfolio Site
 
-Live at [**thangkhuat.dev**](https://thangkhuat.dev) — infrastructure provisioned entirely with Terraform on AWS.
+**Status: Complete.** Live at **[thangkhuat.dev](https://thangkhuat.dev)** — infrastructure provisioned entirely with Terraform on AWS.
 
 ## Stack
 
@@ -12,24 +12,22 @@ Static site → private S3 bucket, served through CloudFront (HTTPS via ACM), wi
 
 ## Status
 
-- ✅ **Phase 1** — Static site live on AWS, provisioned with Terraform  
-- ⬜ Phase 2 — Dynamic backend (VPC, compute, RDS)  
-- ⬜ Phase 3 — CI/CD pipeline (GitHub Actions)  
-- ⬜ Phase 4 — Security hardening (least-privilege IAM, Secrets Manager, GuardDuty)
+- ✅ **Phase 1 — complete.** Static site live on AWS, provisioned with Terraform. This is the finished project.
+- 💡 **Phase 2 onwards — future update.** Dynamic backend, CI/CD, and security hardening are potential future work, not an active roadmap.
 
 ## Docs
 
-- [`docs/functional-requirements.md`](http://docs/functional-requirements.md) — what the site needs to do  
-- [`docs/technical-requirements.md`](http://docs/technical-requirements.md) — how it's built  
-- [`docs/decision-log.md`](http://docs/decision-log.md) — architecture decisions and reasoning  
-- [`docs/session-log.md`](http://docs/session-log.md) — build history, session by session
+- [`docs/functional-requirements.md`](docs/functional-requirements.md) — what the site needs to do
+- [`docs/technical-requirements.md`](docs/technical-requirements.md) — how it's built
+- [`docs/decision-log.md`](docs/decision-log.md) — architecture decisions and reasoning
+- [`docs/session-log.md`](docs/session-log.md) — build history, session by session
 
 ## Deploy
 
+```bash
 terraform init
-
 terraform plan
-
 terraform apply
+```
 
-Requires AWS credentials configured locally (`aws configure`) for an IAM user with appropriate permissions.  
+Requires AWS credentials configured locally (`aws configure`) for an IAM user with appropriate permissions.
