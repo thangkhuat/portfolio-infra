@@ -21,7 +21,6 @@ Static site → private S3 bucket, served through CloudFront (HTTPS via ACM), wi
 - [`docs/functional-requirements.md`](docs/functional-requirements.md) — what the site needs to do
 - [`docs/technical-requirements.md`](docs/technical-requirements.md) — how it's built
 - [`docs/decision-log.md`](docs/decision-log.md) — architecture decisions and reasoning
-- [`docs/session-log.md`](docs/session-log.md) — build history, session by session
 
 ## Deploy
 

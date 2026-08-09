@@ -118,7 +118,7 @@ ADR-005 records that as a pragmatic starting point, not a final state.
 - `docs/decision-log.md` — ADRs; read before proposing architectural changes
 - `docs/bootstrap.md` — manual setup steps and the order to run them
 - `docs/technical-requirements.md` — resource-by-resource breakdown and platform constraints
-- `docs/functional-requirements.md`, `docs/session-log.md`, `docs/phase-1-report.md` — scope and history
+- `docs/functional-requirements.md`, `docs/phase-1-report.md` — scope and history
 
 Note that Phase 2 (VPC/ALB/RDS networking) was built, verified, then destroyed for cost reasons —
 ADR-009. It exists only in git history. Don't treat references to it as live infrastructure.
