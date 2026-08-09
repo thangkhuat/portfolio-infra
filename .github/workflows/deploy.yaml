@@ -6,18 +6,35 @@ on:
     paths:
       - 'index.html' # add more paths here (css/, js/, images/) as the site grows
 
+  # Lets the deploy be run by hand from the Actions tab. Useful for
+  # verifying credentials or re-pushing the current file without having
+  # to make a throwaway edit just to trip the path filter above.
+  workflow_dispatch:
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    # ADR-010: declared explicitly rather than left to the default,
+    # which grants GITHUB_TOKEN write access across the board.
+    permissions:
+      id-token: write # required — lets the job request an OIDC token. Without it, the step below fails
+      contents: read # only needs to read the repo to check it out
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Exchanges a short-lived, GitHub-signed OIDC token for temporary
+      # AWS credentials (~1h). No access keys are stored in this repo.
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # A repository VARIABLE, not a secret — an ARN is an identifier,
+          # not a credential. Holding it grants nothing; the role's trust
+          # policy (see main.tf) is what actually gates access. Kept out of
+          # the committed file only to avoid publishing the account ID.
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ap-southeast-2
 
       - name: Deploy to S3

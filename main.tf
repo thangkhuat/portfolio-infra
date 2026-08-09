@@ -231,3 +231,95 @@ resource "aws_route53_record" "portfolio_alias" {
 output "cloudfront_distribution_id" {
   value = aws_cloudfront_distribution.portfolio_cdn.id
 }
+
+# ------------------------------------------------------------
+# CI/CD identity — GitHub Actions via OIDC
+# ADR-010: the deploy workflow exchanges a short-lived, GitHub-signed
+# OIDC token for temporary AWS credentials. No long-lived IAM user
+# access keys are stored in GitHub at all.
+# ------------------------------------------------------------
+
+# One-time registration telling this AWS account that tokens signed by
+# GitHub's issuer are worth validating. Without it, STS has no reason
+# to believe a GitHub-issued token at all.
+#
+# No thumbprint_list on purpose: since mid-2023 AWS validates this
+# endpoint against its own trusted CA store. Pinning a leaf certificate
+# fingerprint here — as older guides do — would only plant a hardcoded
+# value that breaks silently the next time GitHub rotates certs.
+resource "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+
+  # The audience the workflow asks for. configure-aws-credentials sets
+  # this to sts.amazonaws.com; a token minted for anything else is
+  # rejected before the sub condition below is even considered.
+  client_id_list = ["sts.amazonaws.com"]
+}
+
+# The role the deploy workflow assumes. Its trust policy is the real
+# security boundary — every Actions run on GitHub can obtain a valid
+# OIDC token, so the provider alone proves only "some GitHub workflow",
+# not which one. The sub condition is what makes it *this* one.
+resource "aws_iam_role" "github_actions_deploy" {
+  name = "github-actions-portfolio-deploy"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
+        Action    = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+
+            # Repo AND branch. Dropping this line — or loosening it to a
+            # wildcard — is the classic OIDC misconfiguration: it leaves
+            # the role assumable from any repository on GitHub. A fork or
+            # a PR branch produces a different sub and is denied.
+            "token.actions.githubusercontent.com:sub" = "repo:thangkhuat/portfolio-infra:ref:refs/heads/main"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# Scoped to exactly the two API calls the deploy workflow makes. Worst
+# case if the workflow is ever compromised: the site gets defaced. The
+# role can't read the bucket, delete from it, or reach anything else.
+resource "aws_iam_role_policy" "github_actions_deploy" {
+  name = "portfolio-deploy"
+  role = aws_iam_role.github_actions_deploy.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "WriteSiteFiles"
+        Effect = "Allow"
+        # Upload only — no GetObject, no DeleteObject, no ListBucket.
+        # Switching the workflow to `aws s3 sync --delete` would need
+        # both s3:DeleteObject and s3:ListBucket added here.
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.portfolio_site.arn}/*"
+      },
+      {
+        Sid      = "InvalidateCdnCache"
+        Effect   = "Allow"
+        Action   = "cloudfront:CreateInvalidation"
+        Resource = aws_cloudfront_distribution.portfolio_cdn.arn # this distribution only
+      }
+    ]
+  })
+}
+
+# Goes into the repo's GitHub Actions *variable* AWS_ROLE_ARN — a
+# variable, not a secret. An ARN is an identifier, not a credential:
+# holding it grants nothing, because the trust policy above is what
+# actually gates access. Keeping it out of the committed workflow only
+# avoids publishing the account ID in a public repo's git history.
+output "github_actions_role_arn" {
+  value = aws_iam_role.github_actions_deploy.arn
+}

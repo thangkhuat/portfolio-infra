@@ -4,7 +4,7 @@
 
 ## Stack
 
-Terraform · AWS (S3, CloudFront, Route 53, ACM) · IAM least-privilege access
+Terraform · AWS (S3, CloudFront, Route 53, ACM) · GitHub Actions · IAM least-privilege access
 
 ## Architecture
 
@@ -31,3 +31,5 @@ terraform apply
 ```
 
 Requires AWS credentials configured locally (`aws configure`) for an IAM user with appropriate permissions.
+
+Site content deploys automatically: a push to `main` triggers GitHub Actions, which uploads to S3 and invalidates the CloudFront cache. No AWS access keys are stored in the repo — the workflow authenticates via OIDC, exchanging a short-lived GitHub-signed token for temporary credentials scoped to exactly two actions. See [ADR-010](docs/decision-log.md).

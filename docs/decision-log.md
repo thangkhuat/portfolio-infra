@@ -127,3 +127,22 @@ Architecture Decision Records (ADRs) for this project. Each entry captures a cho
 **Reasoning:** The ALB alone costs ~$16–22/month with zero free-tier coverage, regardless of traffic — a fixed cost with no revenue or real usage to justify it right now. The original Phase 2 purpose (contact form, blog) was also reconsidered as genuinely unnecessary for this site. Keeping the built-but-unused infrastructure running would be paying to demonstrate a skill that's already been demonstrated and documented — the working code and this decision log serve that purpose without the ongoing cost.
 
 **Trade-offs accepted:** Resuming later means rebuilding the VPC/subnet/security-group layer from scratch (all 26 resources were destroyed, not just the compute/RDS pieces) — accepted since none of it cost anything to leave running, but wasn't preserved due to how the teardown was scoped. Full working Terraform for this layer remains in Git history regardless.
+
+---
+
+### ADR-010 — GitHub Actions authenticates to AWS via OIDC, not static access keys
+**Status:** Accepted (partially supersedes the deploy-path half of ADR-005)
+
+**Context:** The deploy workflow pushed `index.html` to S3 using `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` stored as GitHub secrets. Those are long-lived credentials — they don't expire, weren't being rotated, and stay valid from anywhere until manually revoked. A leak via a compromised third-party action, a log dump, or anyone with repo admin would hand over whatever that IAM user could do, indefinitely.
+
+**Alternatives considered:**
+- Keep the IAM user, add a rotation schedule — reduces the exposure window but never closes it; still a standing credential
+- A second, deploy-only IAM user with a narrow policy — fixes the blast radius but not the "long-lived secret sitting in GitHub" problem
+
+**Decision:** Register GitHub's OIDC issuer as an identity provider in the AWS account and create `github-actions-portfolio-deploy`, a role the workflow assumes via `sts:AssumeRoleWithWebIdentity`. Trust policy asserts both `aud = sts.amazonaws.com` and `sub = repo:thangkhuat/portfolio-infra:ref:refs/heads/main`. Permissions scoped to `s3:PutObject` on the site bucket and `cloudfront:CreateInvalidation` on the one distribution.
+
+**Reasoning:** Removes the stored credential entirely rather than shortening its life — GitHub mints a signed token per run asserting which repo and branch is executing, AWS trades it for credentials valid about an hour. The `sub` condition is the real security boundary: every Actions run on GitHub can obtain a valid token, so the identity provider alone proves only "some GitHub workflow," not this one. Omitting or wildcarding that claim is the well-known misconfiguration that leaves a role assumable from any repository on GitHub. The two-action policy also delivers, for the deploy path specifically, the least-privilege narrowing ADR-005 deferred to Phase 4 — worst case on compromise is site defacement, with no read, delete, or lateral access.
+
+The role ARN is stored as a GitHub *variable* rather than a secret. An ARN is an identifier, not a credential; holding it grants nothing, since the trust policy gates access. Filing a non-secret in the secrets store would misrepresent what a secret is.
+
+**Trade-offs accepted:** The trust policy is pinned to `refs/heads/main`, so deploying from any other branch requires a deliberate policy edit — intentional friction, not an oversight. Setup is also more involved than pasting two keys: an identity provider, a role, a trust policy, and the `id-token: write` job permission all have to be right before the first deploy works. `terraform apply` itself still runs locally under the `terraform-portfolio` IAM user from ADR-005 — this decision covers the CI deploy path only. Moving Terraform to OIDC as well would require remote state first, and remains open.
