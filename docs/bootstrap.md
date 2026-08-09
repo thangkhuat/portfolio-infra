@@ -99,20 +99,34 @@ and `terraform apply` will appear to hang on
 
 See [ADR-003](decision-log.md) for why the domain is registered outside AWS.
 
-## 4. GitHub Actions variable
+## 4. GitHub Actions variables
 
-After the OIDC resources exist:
+After `terraform apply` completes:
 
 ```bash
 terraform output github_actions_role_arn
+terraform output cloudfront_distribution_id
 ```
 
-Add it to the repository under **Settings → Secrets and variables → Actions → Variables** as
-`AWS_ROLE_ARN`.
+Add all three under **Settings → Secrets and variables → Actions → Variables**:
 
-A **variable**, not a secret. An ARN is an identifier, not a credential — holding it grants nothing,
-because the role's trust policy is what gates access. Filing a non-secret in the secrets store
-misrepresents what a secret is. See [ADR-010](decision-log.md).
+| Variable | Value |
+| --- | --- |
+| `AWS_ROLE_ARN` | `github_actions_role_arn` output |
+| `CLOUDFRONT_DISTRIBUTION_ID` | `cloudfront_distribution_id` output |
+| `SITE_BUCKET` | the `bucket` argument of `aws_s3_bucket.portfolio_site` in `main.tf` |
+
+The workflow checks all of these before assuming credentials and fails with a readable message if
+any are unset, so a missing variable surfaces immediately rather than partway through a deploy.
+
+**Variables, not secrets.** Neither is a credential. An ARN and a distribution ID are identifiers —
+holding them grants nothing, because the role's trust policy is what gates access. Filing a
+non-secret in the secrets store misrepresents what a secret is. See [ADR-010](decision-log.md).
+
+**Refresh `CLOUDFRONT_DISTRIBUTION_ID` if the distribution is ever destroyed and recreated.** AWS
+assigns a new ID, and the old one would still be accepted by the CLI — invalidating a distribution
+that no longer serves the site, with the deploy reporting success. The workflow fails fast with a
+readable message when the variable is unset, but it cannot detect a value that is merely stale.
 
 ## 5. Repository and owner IDs in the trust policy
 
@@ -149,6 +163,6 @@ The `userName` field is the exact subject claim. Diff it against the trust polic
 2. Inline OIDC policy on that user (§2)
 3. `terraform init && terraform apply` — will pause at certificate validation
 4. Nameserver delegation at Porkbun (§3) — apply completes once DNS propagates
-5. `AWS_ROLE_ARN` repository variable (§4)
+5. `AWS_ROLE_ARN` and `CLOUDFRONT_DISTRIBUTION_ID` repository variables (§4)
 6. Confirm the repo and owner IDs in the trust policy match this repository (§5)
 7. Trigger **Actions → Deploy to S3 → Run workflow** on `main` to verify the deploy path
