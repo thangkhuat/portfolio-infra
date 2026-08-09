@@ -10,6 +10,14 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0" # pinned major version — avoid an unreviewed breaking change
     }
+
+    # Zips the Lambda source at plan time. Keeps the repo free of a build
+    # step: the deployment package is one dependency-free .py file, so
+    # there is nothing to install or bundle first.
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.0"
+    }
   }
 }
 
@@ -459,9 +467,171 @@ resource "aws_ses_domain_identity_verification" "portfolio" {
 # every send fails. Recorded in docs/bootstrap.md alongside the other
 # steps Terraform deliberately doesn't own.
 #
-# Deliberately not the address published in index.html: the form exists
-# so a visitor never needs a personal address, and routing submissions to
-# a different inbox keeps it that way.
+# Same address as the mailto: link in index.html. Splitting the two — a
+# public one for the link, a private one for submissions — is a
+# reasonable later change, and this is the only line it would need.
 resource "aws_ses_email_identity" "notification_recipient" {
   email = "huuthang.khuat21@gmail.com"
+}
+
+# ------------------------------------------------------------
+# Contact form — compute (Lambda + function URL)
+# ADR-011: serverless, because an idle function costs nothing. The
+# same cost test that destroyed the always-on ALB in ADR-009.
+# ------------------------------------------------------------
+
+# Zipped at plan time from a single dependency-free source file. boto3
+# ships in the Python runtime, so there is nothing to pip install and the
+# repo keeps its "no build step" property.
+data "archive_file" "contact_form" {
+  type        = "zip"
+  source_file = "${path.module}/lambda/contact_form/handler.py"
+  output_path = "${path.module}/build/contact_form.zip"
+}
+
+# Declared rather than left to Lambda, which auto-creates its log group on
+# first invocation with retention set to Never Expire — an unbounded bill
+# and unbounded retention of incidental personal data. Terraform also then
+# owns it, so `destroy` cleans it up, and the role below can be scoped to
+# this exact ARN.
+resource "aws_cloudwatch_log_group" "contact_form" {
+  name              = "/aws/lambda/portfolio-contact-form"
+  retention_in_days = 14
+}
+
+resource "aws_iam_role" "contact_form" {
+  name = "portfolio-contact-form"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Service = "lambda.amazonaws.com" }
+        Action    = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# Hand-scoped rather than attaching the managed AWSLambdaBasicExecutionRole,
+# which grants log writes against arn:aws:logs:*:*:* — every log group in
+# the account. The rest of this file pins IAM to exact ARNs, and the
+# function holding other people's personal details is not the place to
+# stop doing that.
+resource "aws_iam_role_policy" "contact_form" {
+  name = "portfolio-contact-form"
+  role = aws_iam_role.contact_form.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "WriteOwnLogs"
+        Effect = "Allow"
+        # No CreateLogGroup: the group is declared above, and the function
+        # has no reason to be able to create others.
+        Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "${aws_cloudwatch_log_group.contact_form.arn}:*"
+      },
+      {
+        Sid    = "StoreSubmission"
+        Effect = "Allow"
+        # Write only. No GetItem, Query, or Scan — the handler never reads,
+        # so a compromised function cannot pull back earlier submissions.
+        # No DeleteItem either, so it cannot destroy them.
+        Action   = "dynamodb:PutItem"
+        Resource = aws_dynamodb_table.contact_submissions.arn
+      },
+      {
+        Sid      = "SendNotification"
+        Effect   = "Allow"
+        Action   = ["ses:SendEmail", "ses:SendRawEmail"]
+        Resource = aws_ses_domain_identity.portfolio.arn
+        Condition = {
+          # Verifying the domain authorized every address at
+          # thangkhuat.dev. This narrows the function to exactly one
+          # sender, so a compromised handler cannot send as a real
+          # personal address from a domain that would DKIM-sign it as
+          # genuine. Together with the SES sandbox (ADR-013), the worst
+          # case is mail from noreply@ to one pre-verified recipient.
+          StringEquals = {
+            "ses:FromAddress" = "noreply@thangkhuat.dev"
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_lambda_function" "contact_form" {
+  function_name = "portfolio-contact-form"
+  role          = aws_iam_role.contact_form.arn
+  runtime       = "python3.12"
+
+  # <file>.<function> — handler.py, and the function named handler in it.
+  handler = "handler.handler"
+
+  filename = data.archive_file.contact_form.output_path
+  # Without this Terraform cannot tell that handler.py changed: the
+  # filename never moves, so an edit would silently never deploy.
+  source_code_hash = data.archive_file.contact_form.output_base64sha256
+
+  # Lambda sells CPU in proportion to memory, so 128MB would mostly buy a
+  # slower cold start while Python imports boto3. Twice the price per ms
+  # over meaningfully fewer ms is close to a wash on the bill.
+  memory_size = 256
+  timeout     = 10
+
+  # A hard ceiling on concurrent copies, and the reason a flood of
+  # requests cannot turn into a bill: every invocation costs a DynamoDB
+  # write and an SES send. No legitimate use of a personal contact form
+  # needs a third simultaneous slot.
+  #
+  # This caps the rate, not the total — a patient attacker still gets two
+  # at a time indefinitely. Per-IP rate limiting was considered and
+  # deferred; see ADR-015.
+  reserved_concurrent_executions = 2
+
+  # Keeps AWS account facts out of the Python, so the handler stays
+  # portable and renaming the table doesn't mean editing code.
+  environment {
+    variables = {
+      SUBMISSIONS_TABLE = aws_dynamodb_table.contact_submissions.name
+      SES_FROM_ADDRESS  = "noreply@thangkhuat.dev"
+      SES_TO_ADDRESS    = aws_ses_email_identity.notification_recipient.email
+    }
+  }
+
+  depends_on = [
+    # Without this the function could log before its group exists, and
+    # Lambda would create an unmanaged one with no retention.
+    aws_cloudwatch_log_group.contact_form,
+
+    # References the VALIDATION resource, not the identity — the same
+    # indirection as ACM. It is what stops Terraform building a function
+    # whose first send would fail because SES hasn't confirmed the domain.
+    aws_ses_domain_identity_verification.portfolio,
+  ]
+}
+
+# AWS_IAM, not NONE, and this is the security boundary for the whole
+# feature. With NONE the URL is invokable by anyone on the internet who
+# learns it — and it would appear in page source the moment the form
+# shipped. With AWS_IAM every request must carry a valid SigV4 signature,
+# and the resource policy in the next section names exactly one caller:
+# this CloudFront distribution.
+#
+# No cors block, deliberately. The browser reaches this through CloudFront
+# at /api/contact — same origin as the page — so CORS never enters into it.
+resource "aws_lambda_function_url" "contact_form" {
+  function_name      = aws_lambda_function.contact_form.function_name
+  authorization_type = "AWS_IAM"
+}
+
+# Curling this directly must return 403 — the verification that the
+# function really is unreachable except through CloudFront. Not a secret:
+# the URL grants nothing without a signature.
+output "contact_form_function_url" {
+  value = aws_lambda_function_url.contact_form.function_url
 }

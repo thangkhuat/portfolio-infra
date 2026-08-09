@@ -2,3 +2,7 @@
 *.tfstate
 *.tfstate.*
 *.tfvars
+
+# Lambda deployment package, rebuilt from lambda/ by archive_file on
+# every plan. Derived artifact — the source of truth is the .py file.
+build/
