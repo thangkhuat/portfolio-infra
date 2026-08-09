@@ -278,7 +278,20 @@ resource "aws_iam_role" "github_actions_deploy" {
             # wildcard — is the classic OIDC misconfiguration: it leaves
             # the role assumable from any repository on GitHub. A fork or
             # a PR branch produces a different sub and is denied.
-            "token.actions.githubusercontent.com:sub" = "repo:thangkhuat/portfolio-infra:ref:refs/heads/main"
+            #
+            # The @<number> suffixes are GitHub's immutable identifiers:
+            # 177017208 is the owner ID, 1322692264 the repo ID. GitHub now
+            # issues the sub claim in this form rather than the older
+            # name-only "repo:owner/name:ref:...". Matching the numeric
+            # form is strictly stronger — names can be renamed or, after a
+            # delete, re-registered by someone else; these IDs cannot.
+            #
+            # Verified against the real claim in CloudTrail, not assumed.
+            # If a deploy ever fails with "Not authorized to perform
+            # sts:AssumeRoleWithWebIdentity", check this claim first:
+            #   aws cloudtrail lookup-events --lookup-attributes \
+            #     AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity
+            "token.actions.githubusercontent.com:sub" = "repo:thangkhuat@177017208/portfolio-infra@1322692264:ref:refs/heads/main"
           }
         }
       }
