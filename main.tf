@@ -388,3 +388,80 @@ resource "aws_dynamodb_table" "contact_submissions" {
   # — see docs/bootstrap.md.
   deletion_protection_enabled = true
 }
+
+# ------------------------------------------------------------
+# Contact form — email delivery (SES)
+# ADR-013: the account stays in the SES sandbox deliberately. Sending
+# only ever goes to one pre-verified address, so the sandbox's
+# verified-recipients-only rule costs nothing and acts as a hard
+# containment control enforced outside this account's own code.
+# ------------------------------------------------------------
+
+# Verifying the DOMAIN authorizes every address at thangkhuat.dev —
+# including the noreply@ sender — without verifying each one. It's also
+# the only form of verification Terraform can complete unaided: the proof
+# is a DNS record, and the hosted zone is already managed above. Verifying
+# a single address instead would mean clicking a link mid-build, for
+# something Terraform can do by itself.
+#
+# The older aws_ses_* resources are used rather than aws_sesv2_*: v2 has
+# no equivalent of the verification waiter below, and losing it would put
+# a race on the first apply.
+resource "aws_ses_domain_identity" "portfolio" {
+  domain = "thangkhuat.dev"
+}
+
+resource "aws_route53_record" "ses_verification" {
+  zone_id = aws_route53_zone.portfolio.zone_id
+  name    = "_amazonses.thangkhuat.dev"
+  type    = "TXT"
+  ttl     = 600
+  records = [aws_ses_domain_identity.portfolio.verification_token]
+}
+
+# DKIM signs outgoing mail so a receiver can prove it genuinely came from
+# this domain. Not cosmetic: unsigned machine-sent mail from a new domain
+# with a noreply@ sender, carrying a stranger's name and message, is
+# indistinguishable from spam. Gmail drops it silently — the form would
+# appear to work, with a 200 and a stored row, while no email ever arrived.
+resource "aws_ses_domain_dkim" "portfolio" {
+  domain = aws_ses_domain_identity.portfolio.domain
+}
+
+# for_each, not count: count keys resources by list position, so a single
+# rotated token would shift every later index and force Terraform to
+# destroy and recreate records that hadn't actually changed. for_each keys
+# by the token value, so only the changed record moves.
+resource "aws_route53_record" "ses_dkim" {
+  for_each = toset(aws_ses_domain_dkim.portfolio.dkim_tokens)
+
+  zone_id = aws_route53_zone.portfolio.zone_id
+  name    = "${each.value}._domainkey.thangkhuat.dev"
+  type    = "CNAME"
+  ttl     = 600
+  records = ["${each.value}.dkim.amazonses.com"]
+}
+
+# Creates nothing — polls until SES confirms it has seen the TXT record
+# above. This is the same indirection as aws_acm_certificate_validation
+# further up the file: the Lambda's IAM policy references THIS resource
+# rather than the identity, which is what makes Terraform wait for
+# verification instead of building a function whose first send would fail.
+resource "aws_ses_domain_identity_verification" "portfolio" {
+  domain     = aws_ses_domain_identity.portfolio.id
+  depends_on = [aws_route53_record.ses_verification]
+}
+
+# The sandbox only delivers to verified recipients, so the destination
+# needs an identity of its own. Terraform creates it and SES sends the
+# confirmation mail, but the link has to be clicked by hand — Terraform
+# can't read an inbox. Until that happens the identity sits Pending and
+# every send fails. Recorded in docs/bootstrap.md alongside the other
+# steps Terraform deliberately doesn't own.
+#
+# Deliberately not the address published in index.html: the form exists
+# so a visitor never needs a personal address, and routing submissions to
+# a different inbox keeps it that way.
+resource "aws_ses_email_identity" "notification_recipient" {
+  email = "huuthang.khuat21@gmail.com"
+}
