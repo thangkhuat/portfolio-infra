@@ -105,16 +105,13 @@ Documented in full in `docs/bootstrap.md`. The reasoning matters because it recu
   is done, `apply` appears to hang on certificate validation.
 - **GitHub repository variables.**
 
-## Current state, and one in-flight item
+## Current state
 
-State is **local** (`terraform.tfstate`, gitignored). An S3 state bucket
-`thangkhuat-dev-portfolio-tfstate` was created (versioned, encrypted, private) in preparation for a
-migration that has **not** happened — there is no `backend` block in `main.tf`. The intended
-direction is `terraform plan` in CI on pull requests with a read-only role, while `apply` stays
-local, specifically so an IAM-capable credential is never reachable from a git push.
+State is **local** (`terraform.tfstate`, gitignored) — there is no `backend` block in `main.tf`.
+Terraform is run by hand; only site content deploys through CI.
 
-`terraform apply` still runs locally under the `terraform-portfolio` IAM user with
-`PowerUserAccess`. ADR-005 records that as a pragmatic starting point, not a final state.
+`terraform apply` runs locally under the `terraform-portfolio` IAM user with `PowerUserAccess`.
+ADR-005 records that as a pragmatic starting point, not a final state.
 
 ## Docs
 
