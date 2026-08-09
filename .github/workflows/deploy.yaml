@@ -15,6 +15,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    # Infrastructure facts live in repository variables, not in this file.
+    # Both are identifiers rather than credentials, so they're variables
+    # and not secrets. Values come from `terraform output` — see
+    # docs/bootstrap.md.
+    env:
+      SITE_BUCKET: ${{ vars.SITE_BUCKET }}
+      DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+
     # ADR-010: declared explicitly rather than left to the default,
     # which grants GITHUB_TOKEN write access across the board.
     permissions:
@@ -24,6 +32,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Runs before credentials are assumed, so a misconfigured repo fails
+      # immediately with a readable message rather than an opaque CLI error
+      # partway through the deploy. Note this catches a MISSING value, not a
+      # stale one — see docs/bootstrap.md.
+      - name: Check deploy configuration
+        run: |
+          missing=""
+          if [ -z "$SITE_BUCKET" ]; then missing="$missing SITE_BUCKET"; fi
+          if [ -z "$DISTRIBUTION_ID" ]; then missing="$missing CLOUDFRONT_DISTRIBUTION_ID"; fi
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository variable(s):$missing — add them under Settings > Secrets and variables > Actions > Variables. Values come from 'terraform output'."
+            exit 1
+          fi
 
       # Exchanges a short-lived, GitHub-signed OIDC token for temporary
       # AWS credentials (~1h). No access keys are stored in this repo.
@@ -38,19 +60,11 @@ jobs:
           aws-region: ap-southeast-2
 
       - name: Deploy to S3
-        run: aws s3 cp index.html s3://thangkhuat-dev-portfolio/index.html
+        run: aws s3 cp index.html "s3://$SITE_BUCKET/index.html"
 
-      # The distribution ID is read from a repository variable rather than
-      # hardcoded: destroying and recreating the distribution assigns a new
-      # ID, and a hardcoded copy would silently go on invalidating a
-      # distribution that no longer exists. Refresh it with
-      # `terraform output cloudfront_distribution_id`.
+      # Destroying and recreating the distribution assigns a new ID, so a
+      # hardcoded copy would go on invalidating a distribution that no longer
+      # serves the site — while still reporting success. Refresh the variable
+      # with `terraform output cloudfront_distribution_id`.
       - name: Invalidate CloudFront cache
-        env:
-          DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
-        run: |
-          if [ -z "$DISTRIBUTION_ID" ]; then
-            echo "::error::Repository variable CLOUDFRONT_DISTRIBUTION_ID is not set. Get the value with 'terraform output cloudfront_distribution_id' and add it under Settings -> Secrets and variables -> Actions -> Variables."
-            exit 1
-          fi
-          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
+        run: aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
