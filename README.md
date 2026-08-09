@@ -17,6 +17,7 @@ Static site → private S3 bucket, served through CloudFront (HTTPS via ACM), wi
 
 ## Docs
 
+- [`docs/bootstrap.md`](docs/bootstrap.md) — the manual steps Terraform deliberately doesn't own, and why
 - [`docs/functional-requirements.md`](docs/functional-requirements.md) — what the site needs to do
 - [`docs/technical-requirements.md`](docs/technical-requirements.md) — how it's built
 - [`docs/decision-log.md`](docs/decision-log.md) — architecture decisions and reasoning
@@ -30,6 +31,6 @@ terraform plan
 terraform apply
 ```
 
-Requires AWS credentials configured locally (`aws configure`) for an IAM user with appropriate permissions.
+Requires AWS credentials configured locally (`aws configure`) for an IAM user with appropriate permissions. A rebuild from an empty AWS account needs the one-time manual steps in [`docs/bootstrap.md`](docs/bootstrap.md) first — `terraform apply` alone is not sufficient.
 
 Site content deploys automatically: a push to `main` triggers GitHub Actions, which uploads to S3 and invalidates the CloudFront cache. No AWS access keys are stored in the repo — the workflow authenticates via OIDC, exchanging a short-lived GitHub-signed token for temporary credentials scoped to exactly two actions. See [ADR-010](docs/decision-log.md).
