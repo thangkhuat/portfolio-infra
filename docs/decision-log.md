@@ -145,4 +145,24 @@ Architecture Decision Records (ADRs) for this project. Each entry captures a cho
 
 The role ARN is stored as a GitHub *variable* rather than a secret. An ARN is an identifier, not a credential; holding it grants nothing, since the trust policy gates access. Filing a non-secret in the secrets store would misrepresent what a secret is.
 
+**Implementation note — the `sub` claim format:** GitHub issues *immutable* subject claims, with owner and repo IDs appended, rather than the name-only form nearly every OIDC guide still shows:
+
+```
+repo:thangkhuat@177017208/portfolio-infra@1322692264:ref:refs/heads/main   # actual
+repo:thangkhuat/portfolio-infra:ref:refs/heads/main                       # what the guides show
+```
+
+The first deploy failed on this. `StringEquals` is exact, so the condition never matched. Matching the numeric form is strictly stronger anyway: names are mutable — a repo can be renamed, and a deleted account's username can be re-registered by someone else, either of which would let a name-based policy authorize an impostor. Owner and repo IDs are never reassigned.
+
+AWS keeps the STS error deliberately vague (`Not authorized to perform sts:AssumeRoleWithWebIdentity`) because naming the failed condition would leak policy contents to an unauthenticated caller. CloudTrail records the claim that was actually presented:
+
+```bash
+aws cloudtrail lookup-events --region ap-southeast-2 \
+  --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity
+```
+
+The `userName` field is the exact `sub` GitHub sent — diff it against the trust policy.
+
+**Verified, not just designed:** a `workflow_dispatch` run from the `fix-oidc-immutable-sub` branch was denied, with CloudTrail showing the owner/repo portion matching and only `ref:refs/heads/fix-oidc-immutable-sub` differing. The branch restriction is therefore confirmed enforced, not merely configured. The same run from `main` succeeded.
+
 **Trade-offs accepted:** The trust policy is pinned to `refs/heads/main`, so deploying from any other branch requires a deliberate policy edit — intentional friction, not an oversight. Setup is also more involved than pasting two keys: an identity provider, a role, a trust policy, and the `id-token: write` job permission all have to be right before the first deploy works. `terraform apply` itself still runs locally under the `terraform-portfolio` IAM user from ADR-005 — this decision covers the CI deploy path only. Moving Terraform to OIDC as well would require remote state first, and remains open.
