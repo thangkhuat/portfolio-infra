@@ -108,12 +108,16 @@ terraform output github_actions_role_arn
 terraform output cloudfront_distribution_id
 ```
 
-Add both under **Settings → Secrets and variables → Actions → Variables**:
+Add all three under **Settings → Secrets and variables → Actions → Variables**:
 
 | Variable | Value |
 | --- | --- |
 | `AWS_ROLE_ARN` | `github_actions_role_arn` output |
 | `CLOUDFRONT_DISTRIBUTION_ID` | `cloudfront_distribution_id` output |
+| `SITE_BUCKET` | the `bucket` argument of `aws_s3_bucket.portfolio_site` in `main.tf` |
+
+The workflow checks all of these before assuming credentials and fails with a readable message if
+any are unset, so a missing variable surfaces immediately rather than partway through a deploy.
 
 **Variables, not secrets.** Neither is a credential. An ARN and a distribution ID are identifiers —
 holding them grants nothing, because the role's trust policy is what gates access. Filing a
