@@ -18,11 +18,12 @@ Create an IAM user (this project uses `terraform-portfolio`), programmatic acces
 Root credentials are never used for provisioning — see [ADR-005](decision-log.md) for the reasoning
 and the trade-off accepted in choosing a policy this broad.
 
-## 2. Inline policy: let Terraform manage the OIDC resources
+## 2. Inline policy: let Terraform manage the IAM resources
 
 `PowerUserAccess` grants everything **except IAM**. Terraform therefore cannot create the OIDC
-provider or the deploy role without an additional grant, and `terraform apply` fails with
-`AccessDenied` on all three resources in the CI/CD section of `main.tf`.
+provider, the deploy role, or the contact form's Lambda execution role without an additional
+grant, and `terraform apply` fails with `AccessDenied` on the CI/CD and contact-form sections of
+`main.tf`.
 
 Attach the following as an **inline policy** on the Terraform IAM user
 (IAM → Users → `terraform-portfolio` → Add permissions → Create inline policy → JSON).
@@ -44,7 +45,7 @@ This project names it `terraform-manage-github-oidc`.
       "Resource": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
     },
     {
-      "Sid": "ManageDeployRole",
+      "Sid": "ManageProjectRoles",
       "Effect": "Allow",
       "Action": [
         "iam:CreateRole",
@@ -59,7 +60,21 @@ This project names it `terraform-manage-github-oidc`.
         "iam:GetRolePolicy",
         "iam:DeleteRolePolicy"
       ],
-      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/github-actions-portfolio-deploy"
+      "Resource": [
+        "arn:aws:iam::<ACCOUNT_ID>:role/github-actions-portfolio-deploy",
+        "arn:aws:iam::<ACCOUNT_ID>:role/portfolio-contact-form"
+      ]
+    },
+    {
+      "Sid": "PassContactFormRoleToLambda",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/portfolio-contact-form",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "lambda.amazonaws.com"
+        }
+      }
     }
   ]
 }
@@ -80,6 +95,23 @@ to the provider ARN. That action only accepts `Resource: "*"`, so scoped to an A
 grant anything. It has been removed rather than widened — Terraform looks the provider up by ARN
 with `GetOpenIDConnectProvider` and never needs the list call. A policy that advertises access it
 cannot provide is worse than one without the entry.
+
+**`iam:PassRole` is a separate statement on purpose, and it is the one to be careful with.**
+Creating a Lambda function is not just a Lambda call — handing it an execution role makes AWS check
+that the *caller* is allowed to give that role to a service. `PowerUserAccess` doesn't grant
+`PassRole`, so without this statement `terraform apply` fails on `aws_lambda_function`, and the
+error names Lambda rather than IAM, which sends you looking in the wrong place.
+
+It is scoped to one role, and further conditioned on `iam:PassedToService`, because `PassRole` is a
+classic privilege-escalation primitive: whoever can pass a role to a service they control
+effectively inherits that role's permissions. Granted on `"Resource": "*"` — as plenty of guides
+show — this single line would let anyone holding these credentials attach *any* role in the
+account, including an administrator role, to a function they wrote. The narrow form grants the
+ability to build this one function and nothing else.
+
+Note that `PassRole` covers only `portfolio-contact-form`, not the deploy role. Nothing ever passes
+`github-actions-portfolio-deploy` to a service — it's assumed via OIDC, which is a different
+mechanism entirely — so including it would grant a capability that has no use.
 
 ## 3. Nameserver delegation at the registrar
 
