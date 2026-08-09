@@ -336,3 +336,55 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
 output "github_actions_role_arn" {
   value = aws_iam_role.github_actions_deploy.arn
 }
+
+# ------------------------------------------------------------
+# Contact form — submission store (DynamoDB)
+# ADR-011: on-demand billing means an idle table costs nothing,
+# which is the same cost test that ruled out the ALB in ADR-009.
+# ------------------------------------------------------------
+
+resource "aws_dynamodb_table" "contact_submissions" {
+  name = "portfolio-contact-submissions"
+
+  # No provisioned capacity to size or pay for while idle. At this
+  # volume the table sits inside the always-free tier entirely.
+  billing_mode = "PAY_PER_REQUEST"
+
+  # A server-generated UUID. Keying on something meaningful — the
+  # submitter's email, say — would let a second message from the same
+  # person silently overwrite the first, since PutItem on an existing
+  # key replaces the item rather than failing.
+  hash_key = "submission_id"
+
+  # Only key attributes are declared. Everything else the handler writes
+  # (name, email, message, submitted_at) needs no declaration — DynamoDB
+  # is schemaless apart from its keys.
+  attribute {
+    name = "submission_id"
+    type = "S"
+  }
+
+  # DynamoDB always encrypts at rest; this switches the default AWS-owned
+  # key for an AWS-managed KMS key, so key usage shows up in CloudTrail.
+  # Costs ~$0.03/10k requests — worth it for a table holding other
+  # people's names, emails, and messages.
+  server_side_encryption {
+    enabled = true
+  }
+
+  # Continuous backups, restorable to any second in the last 35 days.
+  # Priced on stored bytes, so effectively free at this size. Guards
+  # against a handler bug corrupting records — not against the table
+  # itself being dropped, which is what the next setting is for.
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  # A submission is a message from someone that cannot be regenerated:
+  # no `terraform apply` brings it back.
+  #
+  # NOTE: this makes `terraform destroy` fail on this table until the
+  # flag is set to false and applied first. That's the intended friction
+  # — see docs/bootstrap.md.
+  deletion_protection_enabled = true
+}
