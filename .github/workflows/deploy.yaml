@@ -40,5 +40,17 @@ jobs:
       - name: Deploy to S3
         run: aws s3 cp index.html s3://thangkhuat-dev-portfolio/index.html
 
+      # The distribution ID is read from a repository variable rather than
+      # hardcoded: destroying and recreating the distribution assigns a new
+      # ID, and a hardcoded copy would silently go on invalidating a
+      # distribution that no longer exists. Refresh it with
+      # `terraform output cloudfront_distribution_id`.
       - name: Invalidate CloudFront cache
-        run: aws cloudfront create-invalidation --distribution-id EABS056L8C7G4 --paths "/*"
+        env:
+          DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          if [ -z "$DISTRIBUTION_ID" ]; then
+            echo "::error::Repository variable CLOUDFRONT_DISTRIBUTION_ID is not set. Get the value with 'terraform output cloudfront_distribution_id' and add it under Settings -> Secrets and variables -> Actions -> Variables."
+            exit 1
+          fi
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
