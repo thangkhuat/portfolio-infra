@@ -436,18 +436,30 @@ resource "aws_ses_domain_dkim" "portfolio" {
   domain = aws_ses_domain_identity.portfolio.domain
 }
 
-# for_each, not count: count keys resources by list position, so a single
-# rotated token would shift every later index and force Terraform to
-# destroy and recreate records that hadn't actually changed. for_each keys
-# by the token value, so only the changed record moves.
+# count, not for_each — and deliberately, despite for_each being the better
+# default. for_each has to know its keys at PLAN time in order to name the
+# instances, and the DKIM tokens don't exist until SES has been created:
+#
+#   Error: Invalid for_each argument
+#   aws_ses_domain_dkim.portfolio.dkim_tokens is a list of string,
+#   known only after apply
+#
+# That error blocks planning the entire configuration, not just this
+# resource. count only needs the length, which is the literal below — SES
+# always issues exactly three tokens — so the values can stay unknown
+# until apply.
+#
+# The cost is real: count keys by list position, so if SES ever reordered
+# the tokens Terraform would destroy and recreate records that hadn't
+# actually changed. Accepted, because the alternative doesn't plan at all.
 resource "aws_route53_record" "ses_dkim" {
-  for_each = toset(aws_ses_domain_dkim.portfolio.dkim_tokens)
+  count = 3
 
   zone_id = aws_route53_zone.portfolio.zone_id
-  name    = "${each.value}._domainkey.thangkhuat.dev"
+  name    = "${aws_ses_domain_dkim.portfolio.dkim_tokens[count.index]}._domainkey.thangkhuat.dev"
   type    = "CNAME"
   ttl     = 600
-  records = ["${each.value}.dkim.amazonses.com"]
+  records = ["${aws_ses_domain_dkim.portfolio.dkim_tokens[count.index]}.dkim.amazonses.com"]
 }
 
 # Creates nothing — polls until SES confirms it has seen the TXT record
