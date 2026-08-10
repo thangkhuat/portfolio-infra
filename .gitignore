@@ -22,3 +22,5 @@ docs/session-log.md
 # Local tooling guidance, not part of the published project. Stays on
 # disk and keeps working; simply isn't shipped with the repo.
 CLAUDE.md
+
+repomix-output.md
