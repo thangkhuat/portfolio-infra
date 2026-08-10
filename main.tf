@@ -143,6 +143,25 @@ resource "aws_cloudfront_distribution" "portfolio_cdn" {
     origin_access_control_id = aws_cloudfront_origin_access_control.portfolio_oac.id
   }
 
+  # ADR-012: the contact form's Lambda, reached at /api/contact below.
+  origin {
+    # function_url is a full URL (https://<id>.lambda-url...on.aws/);
+    # CloudFront wants a bare hostname.
+    domain_name              = trimsuffix(trimprefix(aws_lambda_function_url.contact_form.function_url, "https://"), "/")
+    origin_id                = "lambda-contact-form-origin"
+    origin_access_control_id = aws_cloudfront_origin_access_control.contact_form_oac.id
+
+    # A function URL is a custom origin, not an S3 one, so unlike the
+    # block above it needs its protocol spelled out. https-only rather
+    # than match-viewer: there is no reason to ever reach AWS in plaintext.
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   default_cache_behavior {
     allowed_methods        = ["GET", "HEAD"] # a static site is only ever read, never written to
     cached_methods          = ["GET", "HEAD"]
@@ -164,6 +183,31 @@ resource "aws_cloudfront_distribution" "portfolio_cdn" {
         forward = "none"
       }
     }
+  }
+
+  # ADR-014: supersedes ADR-007, but narrowly. The default behavior above
+  # keeps forwarding nothing and keeps its cache hit rate; this one path
+  # forwards everything and caches nothing. Only the exception moved.
+  ordered_cache_behavior {
+    # The exact path, not /api/* — nothing broader needs routing, and a
+    # wildcard would send unrelated future paths at this function.
+    path_pattern     = "/api/contact"
+    target_origin_id = "lambda-contact-form-origin"
+
+    # CloudFront accepts only GET/HEAD, those plus OPTIONS, or all seven.
+    # A form POST needs the full set; the handler itself 405s anything
+    # that isn't POST, so the narrowing happens there instead.
+    allowed_methods = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods  = ["GET", "HEAD"]
+
+    # https-only, NOT redirect-to-https like the default behavior.
+    # Browsers drop the request body when following a redirect, so
+    # bouncing a POST would silently discard the submission and return a
+    # confusing success. Refusing plain HTTP outright is the honest failure.
+    viewer_protocol_policy = "https-only"
+
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
   }
 
   # ADR-008: no restriction — audience is recruiters globally
@@ -646,4 +690,62 @@ resource "aws_lambda_function_url" "contact_form" {
 # the URL grants nothing without a signature.
 output "contact_form_function_url" {
   value = aws_lambda_function_url.contact_form.function_url
+}
+
+# ------------------------------------------------------------
+# Contact form — CloudFront routing
+# ADR-012: the browser reaches the function through this distribution at
+# /api/contact, never directly. Same origin as the page, so no CORS; and
+# the function URL stays invokable by exactly one caller.
+# ADR-014: supersedes ADR-007 for this one path only.
+# ------------------------------------------------------------
+
+# A second OAC, because an OAC declares the origin type it signs for and
+# portfolio_oac above is "s3". Same mechanism as the bucket (ADR-006):
+# CloudFront signs every origin request so Lambda can prove it came from
+# this distribution rather than from anyone who learned the URL.
+resource "aws_cloudfront_origin_access_control" "contact_form_oac" {
+  name                              = "portfolio-contact-form-oac"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+# A form submission must never be served from cache, and the request body
+# must never become part of a cache key.
+data "aws_cloudfront_cache_policy" "caching_disabled" {
+  name = "Managed-CachingDisabled"
+}
+
+# Forwards every viewer header EXCEPT Host, and that exception is what
+# makes the whole thing work rather than something being given up. SigV4
+# signs the Host header and Lambda validates the signature against its
+# OWN hostname — forwarding the viewer's Host: thangkhuat.dev would make
+# the signed host and the receiving host disagree, failing every request.
+#
+# It also carries x-amz-content-sha256 through, which is not optional:
+# CloudFront does not hash the request body itself. Per AWS's docs, the
+# caller must compute SHA256 of the body and send it in that header,
+# because Lambda function URLs don't accept unsigned payloads. CloudFront
+# signs whatever value it is handed. Omit it and POST fails with a
+# signature mismatch while GET works perfectly — which is exactly what
+# makes it hard to diagnose. The browser side of this is in
+# assets/contact-form.js.
+data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
+  name = "Managed-AllViewerExceptHostHeader"
+}
+
+# The counterpart to authorization_type = "AWS_IAM" on the function URL.
+# Until this exists every caller is refused, CloudFront included.
+#
+# source_arn narrows it to THIS distribution — without that condition the
+# grant would let any CloudFront distribution, in any AWS account, invoke
+# the function. Same containment as the S3 bucket policy further up.
+resource "aws_lambda_permission" "cloudfront_invoke" {
+  statement_id           = "AllowCloudFrontServicePrincipal"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.contact_form.function_name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.portfolio_cdn.arn
+  function_url_auth_type = "AWS_IAM"
 }

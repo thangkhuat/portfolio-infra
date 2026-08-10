@@ -71,6 +71,17 @@ override_resource {
   }
 }
 
+# Same reason as the three above: aws_lambda_permission.cloudfront_invoke
+# pins source_arn to the distribution's ARN, which doesn't exist until
+# apply. Without this the source_arn assertion can't be evaluated.
+override_resource {
+  target          = aws_cloudfront_distribution.portfolio_cdn
+  override_during = plan
+  values = {
+    arn = "arn:aws:cloudfront::000000000000:distribution/E000000000000"
+  }
+}
+
 # ------------------------------------------------------------
 # The endpoint is the whole attack surface
 # ------------------------------------------------------------
@@ -243,5 +254,108 @@ run "mail_is_sent_from_the_site_domain" {
   assert {
     condition     = length(aws_route53_record.ses_dkim) == 3
     error_message = "SES issues exactly three DKIM tokens and all three CNAMEs must be published. A partial set leaves DKIM unverified, and unsigned mail from a new domain is dropped silently rather than bounced."
+  }
+}
+
+# ------------------------------------------------------------
+# Routing — CloudFront is the only path to the function
+# ------------------------------------------------------------
+
+run "origin_requests_to_the_function_are_signed" {
+  command = plan
+
+  assert {
+    condition     = aws_cloudfront_origin_access_control.contact_form_oac.origin_access_control_origin_type == "lambda"
+    error_message = "The contact form OAC must be of origin type lambda. The S3 OAC cannot be reused, and an origin type mismatch means CloudFront does not sign the requests it sends to the function."
+  }
+
+  assert {
+    condition     = aws_cloudfront_origin_access_control.contact_form_oac.signing_behavior == "always"
+    error_message = "Signing behavior must stay 'always'. Set to 'never' this turns OAC off, and CloudFront sends unsigned requests that an AWS_IAM function URL will refuse — or worse, that a NONE function URL would accept from anyone."
+  }
+
+  assert {
+    condition     = aws_cloudfront_origin_access_control.contact_form_oac.signing_protocol == "sigv4"
+    error_message = "SigV4 is the only signing protocol Lambda function URLs accept."
+  }
+}
+
+run "only_this_distribution_may_invoke_the_function" {
+  command = plan
+
+  assert {
+    condition     = aws_lambda_permission.cloudfront_invoke.source_arn == aws_cloudfront_distribution.portfolio_cdn.arn
+    error_message = "The invoke permission must be pinned to this distribution's ARN. Without the source_arn condition the grant lets ANY CloudFront distribution, in any AWS account, invoke the function — which is the whole boundary this feature rests on."
+  }
+
+  assert {
+    condition     = aws_lambda_permission.cloudfront_invoke.principal == "cloudfront.amazonaws.com"
+    error_message = "Only the CloudFront service principal should hold this grant."
+  }
+
+  assert {
+    condition     = aws_lambda_permission.cloudfront_invoke.action == "lambda:InvokeFunctionUrl"
+    error_message = "The grant must be InvokeFunctionUrl, not the broader lambda:InvokeFunction. CloudFront reaches the function through its URL and needs nothing more."
+  }
+
+  assert {
+    condition     = aws_lambda_permission.cloudfront_invoke.function_url_auth_type == "AWS_IAM"
+    error_message = "The permission must be scoped to the AWS_IAM auth type. Scoped to NONE it would grant against an unauthenticated URL, which is the configuration this design exists to avoid."
+  }
+}
+
+run "form_submissions_are_never_cached_or_sent_in_plaintext" {
+  command = plan
+
+  assert {
+    condition = one([
+      for b in aws_cloudfront_distribution.portfolio_cdn.ordered_cache_behavior :
+      b.cache_policy_id if b.path_pattern == "/api/contact"
+    ]) == data.aws_cloudfront_cache_policy.caching_disabled.id
+    error_message = "/api/contact must use the CachingDisabled policy. Any caching on a form endpoint risks one visitor's submission response being served to another, and makes the request body part of a cache key."
+  }
+
+  assert {
+    condition = one([
+      for b in aws_cloudfront_distribution.portfolio_cdn.ordered_cache_behavior :
+      b.viewer_protocol_policy if b.path_pattern == "/api/contact"
+    ]) == "https-only"
+    error_message = "/api/contact must be https-only, not redirect-to-https. Browsers drop the request body when following a redirect, so a redirected POST silently loses the submission while appearing to succeed."
+  }
+
+  assert {
+    condition = one([
+      for o in aws_cloudfront_distribution.portfolio_cdn.origin :
+      one(o.custom_origin_config).origin_protocol_policy
+      if o.origin_id == "lambda-contact-form-origin"
+    ]) == "https-only"
+    error_message = "CloudFront must reach the function over HTTPS only. There is no reason to carry a submitter's name, email and message to AWS in plaintext."
+  }
+}
+
+# A regression test on a decision made BEFORE this feature. ADR-014
+# supersedes ADR-007 for /api/contact only; the default behavior must
+# keep forwarding nothing, or the static site quietly loses its cache
+# hit rate to a change that was never meant to reach it.
+run "adding_the_api_path_did_not_loosen_the_default_behavior" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for b in aws_cloudfront_distribution.portfolio_cdn.default_cache_behavior :
+      alltrue([for f in b.forwarded_values : f.query_string == false])
+    ])
+    error_message = "The default behavior must still forward no query string. ADR-007 holds for /*; only /api/contact is the documented exception."
+  }
+
+  assert {
+    condition = alltrue([
+      for b in aws_cloudfront_distribution.portfolio_cdn.default_cache_behavior :
+      alltrue([
+        for f in b.forwarded_values :
+        alltrue([for c in f.cookies : c.forward == "none"])
+      ])
+    ])
+    error_message = "The default behavior must still forward no cookies. ADR-007 holds for /*; only /api/contact is the documented exception."
   }
 }
