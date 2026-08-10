@@ -5,8 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 Terraform-provisioned AWS infrastructure for a static personal site at `thangkhuat.dev`, plus the
-one-page site itself (`index.html`). There is no build step, no test suite, and no application
-framework — the deliverable is the infrastructure code and its documented reasoning.
+one-page site itself (`index.html`). There is no build step and no application framework — the
+deliverable is the infrastructure code and its documented reasoning. There *is* a test suite; see
+**Testing** below, and write one for whatever you add.
 
 This is an explicit job-hunt portfolio piece. The decision log and inline comments are part of the
 product, not overhead: they exist so a reviewer can see *why* each choice was made. Match that
@@ -21,6 +22,15 @@ terraform validate              # syntax + internal consistency, no AWS calls
 terraform plan                  # dry run against real AWS state
 terraform apply                 # applied locally, never from CI (see below)
 terraform output <name>         # e.g. cloudfront_distribution_id, github_actions_role_arn
+```
+
+Test runners — one per layer, all dependency-free. See **Testing** for what belongs in each. Only
+the Terraform suite exists so far; the other two arrive with the code they cover.
+
+```bash
+terraform test                       # plan-only assertions; creates no resources
+py -m unittest discover -s lambda    # `py`, not `python` — see Testing
+node --test                          # built into Node 18+; there is no node_modules
 ```
 
 Site content deploys via GitHub Actions on push to `main`, but **only when `index.html` changes** —
@@ -58,10 +68,57 @@ policy grants `s3:GetObject` only when `AWS:SourceArn` matches this exact distri
 **CI has its own identity.** GitHub Actions authenticates via OIDC — no AWS keys are stored
 anywhere. See "OIDC gotchas" below before touching any of it.
 
+## Testing
+
+**Every part gets a test file written alongside it, passing, before the next part is built on top
+of it.** This is a sequencing rule, not a coverage target. A bug in an isolated Lambda handler
+costs minutes to find; the same bug once CloudFront, SES, and DynamoDB are wired together costs an
+afternoon of bisecting layers to decide which one is lying.
+
+| Layer | Tool | Location |
+| --- | --- | --- |
+| Terraform | `terraform test` | `tests/*.tftest.hcl` |
+| Lambda handler | stdlib `unittest` | `lambda/contact_form/test_handler.py` *(arrives with the handler)* |
+| Browser JS | `node --test` | `assets/*.test.js` *(arrives with the form script)* |
+
+Nothing here needs installing. `node --test` is built into Node 18+, `unittest` is stdlib, and
+boto3 is stubbed rather than installed — it ships in the Lambda runtime, so a local copy would only
+be a second version to keep in sync.
+
+**A test that cannot fail is worse than no test**, because it produces confidence without
+coverage. Any assertion guarding a security or cost control must be verified by mutation before it
+is committed: break the control, confirm *that* test fails and nothing else does, revert. The
+Terraform suite reported 11 green assertions before a single one had been shown capable of failing;
+setting `authorization_type` to `NONE` and adding `dynamodb:Scan` is what turned it into coverage.
+
+**Error messages say why the control exists**, not what the comparison was. A failure should read
+*"without this condition a compromised handler could send as a real personal address, DKIM-signed
+as genuine"* — not *"expected true, got false."* The message is where the reasoning lives, same as
+the inline comments and the ADRs.
+
+**Terraform tests are plan-only** (`command = plan`) and create nothing. Three details cost real
+time to work out; don't rediscover them:
+
+- **Mocking the `aws` provider wholesale does not work.** It makes every computed attribute
+  unknown, including `aws_acm_certificate.domain_validation_options`, which
+  `aws_route53_record.cert_validation` does `for_each` over. `for_each` must know its keys during
+  graph construction, so the plan dies before any assertion runs. Only `archive` is mocked — which
+  means `terraform test` needs AWS credentials, consistent with Terraform only ever running locally
+  here.
+- **The execution role policy is unknown at plan time.** It's `jsonencode`d over ARNs that don't
+  exist until apply, so `jsondecode` can't be evaluated against it. Three `override_resource`
+  blocks with `override_during = plan` pin those ARNs to placeholders — with a placeholder account
+  ID, since the repo is public.
+- **`py`, not `python`.** Python isn't on the Bash `PATH` on this machine; only the Windows `py`
+  launcher resolves.
+
 ## Conventions
 
 - **Branch and open a PR.** Do not commit directly to `main`. Existing history is PRs #2 onward.
 - **No AI attribution in commit messages.** No `Co-Authored-By` trailers of any kind.
+- **Test each part before building on it.** A part isn't done because `terraform validate` passed —
+  it's done when its own test file passes, and security and cost assertions have been shown capable
+  of failing. See **Testing** above.
 - **Record real decisions as ADRs** in `docs/decision-log.md`, numbered, never edited in place —
   supersede with a new entry instead. Include alternatives considered and trade-offs accepted.
 - **No hardcoded infrastructure facts in workflows.** Role ARN, bucket name, and distribution ID

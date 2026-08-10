@@ -4,7 +4,7 @@
 
 ## Stack
 
-Terraform · AWS (S3, CloudFront, Route 53, ACM) · GitHub Actions · IAM least-privilege access
+Terraform · AWS (S3, CloudFront, Route 53, ACM) · GitHub Actions · IAM least-privilege access · `terraform test`
 
 ## Architecture
 
@@ -26,6 +26,7 @@ Static site → private S3 bucket, served through CloudFront (HTTPS via ACM), wi
 
 ```bash
 terraform init
+terraform test     # plan-only assertions on the security and cost controls; creates nothing
 terraform plan
 terraform apply
 ```
