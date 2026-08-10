@@ -68,8 +68,14 @@ A live, HTTPS-secured, custom-domain portfolio site, provisioned entirely as cod
 - Full documentation (README, functional/technical requirements, architecture decision log, session log) committed alongside the infrastructure code
 - A public GitHub repository demonstrating the actual Terraform, not just the result
 
-## Status: Project Complete
+## Status: Phase 1 complete
 
-This is the finished project — live, documented, and stable.
+> **Later addendum.** This report describes Phase 1 as it stood when written, and is kept as a
+> point-in-time record rather than being revised. The site has since gained a serverless contact
+> form — Lambda, SES and DynamoDB behind the same CloudFront distribution — which reversed the
+> scope call below without contradicting its cost reasoning. See ADR-011 through ADR-016 in
+> `docs/decision-log.md`, and `docs/technical-requirements.md` for the current architecture.
+
+Phase 1 itself is finished — live, documented, and stable.
 
 **Phase 2 onwards is a future update**, not an active roadmap. A dynamic-backend network layer was built and confirmed working after this report was first written, then deliberately torn down — the ongoing cost of an Application Load Balancer (~$16–22/month, no free tier at any account age) wasn't justified without real traffic or revenue. Full working Terraform remains in Git history. See `docs/decision-log.md` (ADR-009) for the full reasoning.

@@ -1,19 +1,39 @@
 # Personal Portfolio Site
 
-**Status: Complete.** Live at **[thangkhuat.dev](https://thangkhuat.dev)** — infrastructure provisioned entirely with Terraform on AWS.
+**Status: Live** at **[thangkhuat.dev](https://thangkhuat.dev)** — infrastructure provisioned entirely with Terraform on AWS.
 
 ## Stack
 
-Terraform · AWS (S3, CloudFront, Route 53, ACM) · GitHub Actions · IAM least-privilege access · `terraform test`
+Terraform · AWS (S3, CloudFront, Route 53, ACM, Lambda, SES, DynamoDB, IAM) · GitHub Actions · OIDC · `terraform test`
 
 ## Architecture
 
-Static site → private S3 bucket, served through CloudFront (HTTPS via ACM), with Origin Access Control as the only path allowed into the bucket. DNS resolved through Route 53, domain registered via Porkbun.
+**The site.** Private S3 bucket served through CloudFront (HTTPS via ACM), with Origin Access Control as the only path allowed into the bucket. DNS resolved through Route 53, domain registered via Porkbun.
+
+**The contact form.** The browser POSTs to `/api/contact` on the same domain — CloudFront routes that one path to a Lambda function URL over a second Origin Access Control, so the function is invokable by this distribution and nothing else. The handler validates, writes the submission to DynamoDB, then sends a notification through SES. Same origin throughout, so no CORS is involved anywhere.
+
+```
+browser ──▶ CloudFront ──┬── /*            ──▶ S3 (private, OAC)
+                         └── /api/contact  ──▶ Lambda URL (AWS_IAM, OAC)
+                                                  ├──▶ DynamoDB
+                                                  └──▶ SES
+```
+
+## Tests
+
+```bash
+terraform test                                   # infrastructure, plan-only
+py -m unittest discover -s lambda/contact_form   # the handler
+node --test                                      # the browser module
+```
+
+No dependencies at any layer. Assertions guarding a security or cost control are verified by mutation — broken deliberately to confirm they can fail — because the first suite reported eleven passing assertions before any had been shown capable of failing. See [ADR-016](docs/decision-log.md).
 
 ## Status
 
-- ✅ **Phase 1 — complete.** Static site live on AWS, provisioned with Terraform. This is the finished project.
-- 💡 **Phase 2 onwards — future update.** Dynamic backend, CI/CD, and security hardening are potential future work, not an active roadmap.
+- ✅ **Static site** — live, provisioned with Terraform, deployed through GitHub Actions via OIDC.
+- ✅ **Contact form** — live. Serverless, so it costs nothing idle; that is why it exists at all, after an earlier ALB-based design was rejected on cost ([ADR-009](docs/decision-log.md), [ADR-011](docs/decision-log.md)).
+- 💡 **Known gaps** — listed with reasoning under "Not yet built" in [`docs/technical-requirements.md`](docs/technical-requirements.md).
 
 ## Docs
 
