@@ -1,0 +1,9 @@
+{
+  "name": "thangkhuat-dev",
+  "private": true,
+  "type": "module",
+  "description": "Type declaration only, so Node treats assets/*.js as ES modules and can run the tests. There are deliberately no dependencies: node --test is built into Node 18+, so this repo has no node_modules and no build step.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -17,6 +17,7 @@
     --accent: #2F6E62;
     --accent-soft: #E3EEEC;
     --line: #D9E0DD;
+    --danger: #9B3B2E;
     --max: 880px;
   }
 
@@ -42,7 +43,8 @@
 
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  a:focus-visible, button:focus-visible {
+  a:focus-visible, button:focus-visible,
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
   }
@@ -103,6 +105,10 @@
     border-radius: 4px;
     border: 1px solid var(--ink);
   }
+  /* .btn is applied to <a> everywhere else on the page; the form's submit
+     is a real <button>, which needs these three or it inherits the UA's
+     font and sizing instead. */
+  button.btn { font: inherit; font-family: 'IBM Plex Mono', monospace; cursor: pointer; display: inline-block; }
   .btn.primary { background: var(--ink); color: var(--bg); }
   .btn.primary:hover { background: var(--accent); border-color: var(--accent); text-decoration: none; }
   .btn.secondary { color: var(--ink); border-color: var(--line); }
@@ -186,6 +192,58 @@
   .contact-lines { font-family: 'IBM Plex Mono', monospace; font-size: 15px; line-height: 2; }
   .contact-lines .loc { color: var(--ink-muted); font-family: 'IBM Plex Sans', sans-serif; margin-bottom: 14px; }
 
+  /* ---------- Contact Form ---------- */
+  .form-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: clamp(24px, 4vw, 40px);
+    margin-top: 36px;
+  }
+  .form-card h3 { font-size: 18px; font-weight: 600; }
+  .form-intro { max-width: 56ch; color: var(--ink-muted); margin: 10px 0 28px; }
+  .form-note { color: var(--danger); margin: 0 0 20px; }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .form-row .field { margin-bottom: 0; }
+  .form-row + .field { margin-top: 20px; }
+
+  .field label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    font-weight: 500;
+  }
+  /* font: inherit matters — without it browsers substitute their own
+     control font, and the form stops looking like the rest of the page. */
+  .field input, .field select, .field textarea {
+    font: inherit;
+    width: 100%;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 12px;
+  }
+  .field textarea { resize: vertical; min-height: 120px; }
+  .field input:hover, .field select:hover, .field textarea:hover { border-color: var(--ink-muted); }
+
+  /* Off screen rather than display:none, which some bots skip. */
+  .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+  .form-actions { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 4px; }
+  .form-status {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    margin: 0;
+  }
+  .form-status.is-ok { color: var(--accent); }
+  .form-status.is-error { color: var(--danger); }
+  button.btn[disabled] { opacity: 0.55; cursor: not-allowed; }
+
   footer {
     text-align: center;
     padding: 28px 0 40px;
@@ -198,6 +256,8 @@
     .skill-groups { grid-template-columns: 1fr; gap: 24px; }
     .cta-row { flex-direction: column; }
     .btn { text-align: center; }
+    /* gap already supplies the row spacing once this is a single column */
+    .form-row { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -328,14 +388,70 @@
     <p class="eyebrow">Contact</p>
     <p class="contact-lines loc">Melbourne, Australia</p>
     <div class="contact-lines">
-      <div><a href="mailto:thanghuu.khuat@gmail.com">thanghuu.khuat@gmail.com</a></div>
+      <div><a href="mailto:huuthang.khuat21@gmail.com">huuthang.khuat21@gmail.com</a></div>
       <div><a href="https://github.com/thangkhuat" target="_blank" rel="noopener">github.com/thangkhuat</a></div>
       <div><a href="https://www.linkedin.com/in/thang-khuat-690117273/" target="_blank" rel="noopener">linkedin.com/in/thang-khuat</a></div>
+    </div>
+
+    <div class="form-card">
+      <h3>Start a conversation</h3>
+      <p class="form-intro">Collaboration, a role, or just a question — whichever it is, this reaches me directly.</p>
+
+      <noscript>
+        <p class="form-note">This form needs JavaScript. Email me at the address above instead.</p>
+      </noscript>
+
+      <form id="contact-form" novalidate>
+        <div class="form-row">
+          <div class="field">
+            <label for="cf-name">Name</label>
+            <input id="cf-name" name="name" type="text" maxlength="100" required autocomplete="name">
+          </div>
+          <div class="field">
+            <label for="cf-email">Email</label>
+            <input id="cf-email" name="email" type="email" maxlength="254" required autocomplete="email">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="cf-topic">What's this about?</label>
+          <select id="cf-topic" name="topic">
+            <option value="collaboration">Collaboration</option>
+            <option value="opportunity">Job opportunity</option>
+            <option value="general">Something else</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="cf-message">Message</label>
+          <textarea id="cf-message" name="message" rows="5" maxlength="5000" required></textarea>
+        </div>
+
+        <!-- Honeypot. Positioned off screen rather than display:none, which
+             some bots skip. aria-hidden and tabindex=-1 keep it away from
+             screen readers and the tab order — a real person who filled it
+             in would be silently discarded for doing as they were asked. -->
+        <div class="hp" aria-hidden="true">
+          <label for="cf-website">Leave this field empty</label>
+          <input id="cf-website" name="website" type="text" tabindex="-1" autocomplete="off">
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn primary" id="cf-submit">Send message</button>
+          <p class="form-status" id="cf-status" role="status" aria-live="polite"></p>
+        </div>
+      </form>
     </div>
   </div>
 </section>
 
 <footer>Built with Terraform on AWS · thangkhuat.dev</footer>
+
+<!-- A module rather than an inline script: it can be unit tested with
+     `node --test`, and it keeps the page free of inline JavaScript, so a
+     Content-Security-Policy could be added later without unsafe-inline.
+     type="module" is deferred by default. -->
+<script type="module" src="/assets/contact-form.js"></script>
 
 </body>
 </html>

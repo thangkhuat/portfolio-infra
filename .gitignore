@@ -2,3 +2,23 @@
 *.tfstate
 *.tfstate.*
 *.tfvars
+
+# Lambda deployment package, rebuilt from lambda/ by archive_file on
+# every plan. Derived artifact — the source of truth is the .py file.
+build/
+
+# Bytecode written by the interpreter whenever the tests run.
+__pycache__/
+
+# There are deliberately no JS dependencies — node --test is built into
+# Node 18+. This is here so an accidental `npm install` can't commit one.
+node_modules/
+
+# Working notes kept for personal reference, not part of the published
+# project. Untracked deliberately — edit freely without it landing in a
+# commit.
+docs/session-log.md
+
+# Local tooling guidance, not part of the published project. Stays on
+# disk and keeps working; simply isn't shipped with the repo.
+CLAUDE.md
