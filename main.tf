@@ -758,3 +758,27 @@ resource "aws_lambda_permission" "cloudfront_invoke" {
   source_arn             = aws_cloudfront_distribution.portfolio_cdn.arn
   function_url_auth_type = "AWS_IAM"
 }
+
+# The companion grant, which AWS's OAC documentation lists as a second
+# add-permission call alongside the one above. It is genuinely required:
+# with only InvokeFunctionUrl in place, a signed request through
+# CloudFront was refused with
+#
+#   403 AccessDeniedException — "Forbidden. For troubleshooting Function
+#   URL authorization issues, see: .../urls-auth.html"
+#
+# Worth knowing how to read that error, because it looks like several
+# other faults. AccessDenied means the request reached Lambda and was
+# refused on authorization — routing and OAC signing were both already
+# working. A signing or hash problem returns SignatureDoesNotMatch
+# instead, and a routing problem never reaches Lambda at all.
+#
+# Pinned to the same distribution ARN, so this widens the action without
+# widening who may use it.
+resource "aws_lambda_permission" "cloudfront_invoke_function" {
+  statement_id  = "AllowCloudFrontServicePrincipalInvokeFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.contact_form.function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.portfolio_cdn.arn
+}

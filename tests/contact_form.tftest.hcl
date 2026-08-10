@@ -307,6 +307,20 @@ run "only_this_distribution_may_invoke_the_function" {
     condition     = aws_lambda_permission.cloudfront_invoke.function_url_auth_type == "AWS_IAM"
     error_message = "The permission must be scoped to the AWS_IAM auth type. Scoped to NONE it would grant against an unauthenticated URL, which is the configuration this design exists to avoid."
   }
+
+  # The companion grant is required in practice, not just by the docs:
+  # without it a correctly signed request is refused with
+  # AccessDeniedException. It must be pinned to the same distribution, or
+  # widening the action would widen the caller too.
+  assert {
+    condition     = aws_lambda_permission.cloudfront_invoke_function.source_arn == aws_cloudfront_distribution.portfolio_cdn.arn
+    error_message = "The InvokeFunction grant must be pinned to this distribution's ARN, exactly as the InvokeFunctionUrl one is. It is the broader of the two actions, so leaving its caller unscoped would be the worse mistake."
+  }
+
+  assert {
+    condition     = aws_lambda_permission.cloudfront_invoke_function.principal == "cloudfront.amazonaws.com"
+    error_message = "Only the CloudFront service principal should hold the InvokeFunction grant."
+  }
 }
 
 run "form_submissions_are_never_cached_or_sent_in_plaintext" {
