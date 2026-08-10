@@ -71,6 +71,16 @@ override_resource {
   }
 }
 
+# The recipient's identity ARN is in the SES grant too — see the
+# SendNotification statement in main.tf for why.
+override_resource {
+  target          = aws_ses_email_identity.notification_recipient
+  override_during = plan
+  values = {
+    arn = "arn:aws:ses:ap-southeast-2:000000000000:identity/recipient@example.com"
+  }
+}
+
 # Same reason as the three above: aws_lambda_permission.cloudfront_invoke
 # pins source_arn to the distribution's ARN, which doesn't exist until
 # apply. Without this the source_arn assertion can't be evaluated.
@@ -164,6 +174,20 @@ run "handler_can_only_send_as_the_noreply_address" {
       try(s.Condition.StringEquals["ses:FromAddress"], null) if s.Sid == "SendNotification"
     ]) == "noreply@thangkhuat.dev"
     error_message = "The ses:FromAddress condition is missing or changed. Verifying the domain authorized EVERY address at thangkhuat.dev, so without this condition a compromised handler could send as a real personal address, DKIM-signed as genuine."
+  }
+
+  # Regression test for a real failure. Granting only the domain identity
+  # produced AccessDenied on the RECIPIENT's identity ARN, because SES
+  # authorizes SendEmail against every identity in the call and the
+  # sandbox makes the recipient one of them. The send failed silently
+  # from the caller's point of view, since a SES failure still returns
+  # 200 by design.
+  assert {
+    condition = length(one([
+      for s in jsondecode(aws_iam_role_policy.contact_form.policy).Statement :
+      s.Resource if s.Sid == "SendNotification"
+    ])) == 2
+    error_message = "The SES grant must name both identities: the sending domain AND the verified recipient. SES authorizes SendEmail against every identity involved, and while the account stays in the sandbox (ADR-013) the recipient is a verified identity too. Naming only the domain fails with AccessDenied on the recipient's ARN — and does so invisibly, because the handler still returns 200 when only the mail leg fails."
   }
 }
 

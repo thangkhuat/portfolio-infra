@@ -600,10 +600,25 @@ resource "aws_iam_role_policy" "contact_form" {
         Resource = aws_dynamodb_table.contact_submissions.arn
       },
       {
-        Sid      = "SendNotification"
-        Effect   = "Allow"
-        Action   = ["ses:SendEmail", "ses:SendRawEmail"]
-        Resource = aws_ses_domain_identity.portfolio.arn
+        Sid    = "SendNotification"
+        Effect = "Allow"
+        Action = ["ses:SendEmail", "ses:SendRawEmail"]
+        # BOTH identities, and the second one is easy to miss. SES
+        # authorizes SendEmail against every identity involved in the
+        # call, not just the sender. Granting only the domain produced:
+        #
+        #   AccessDenied ... not authorized to perform ses:SendEmail on
+        #   resource arn:aws:ses:...:identity/<recipient address>
+        #
+        # The recipient is an identity here precisely because the account
+        # stays in the SES sandbox (ADR-013) — the sandbox requires
+        # verified recipients, and a verified recipient is an identity,
+        # and identities are authorization resources. Leaving the sandbox
+        # would remove this requirement along with the containment it buys.
+        Resource = [
+          aws_ses_domain_identity.portfolio.arn,
+          aws_ses_email_identity.notification_recipient.arn,
+        ]
         Condition = {
           # Verifying the domain authorized every address at
           # thangkhuat.dev. This narrows the function to exactly one
