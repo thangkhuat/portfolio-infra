@@ -103,9 +103,14 @@ run "function_url_is_not_publicly_invokable" {
 run "invocation_rate_is_capped" {
   command = plan
 
+  # -1 means unreserved, and is the expected value here: AWS refuses any
+  # reservation while the account concurrency limit is 10, because it also
+  # requires 10 to stay unreserved. This asserts the invariant that
+  # survives either state — never hand a public unauthenticated endpoint a
+  # large slice of the account's concurrency.
   assert {
-    condition     = aws_lambda_function.contact_form.reserved_concurrent_executions == 2
-    error_message = "The concurrency ceiling is a cost control on a public unauthenticated endpoint: every invocation costs a DynamoDB write and an SES send. Removing it (-1 = unreserved) makes the bill the attack."
+    condition     = aws_lambda_function.contact_form.reserved_concurrent_executions <= 5
+    error_message = "Reserved concurrency must stay small, or unset at -1. Every invocation of this endpoint costs a DynamoDB write and an SES send, so a large reservation is what turns a flood into a bill. If the account quota has been raised, a small cap is the intended state — not a big one."
   }
 
   assert {

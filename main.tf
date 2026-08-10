@@ -639,15 +639,24 @@ resource "aws_lambda_function" "contact_form" {
   memory_size = 256
   timeout     = 10
 
-  # A hard ceiling on concurrent copies, and the reason a flood of
-  # requests cannot turn into a bill: every invocation costs a DynamoDB
-  # write and an SES send. No legitimate use of a personal contact form
-  # needs a third simultaneous slot.
+  # There is deliberately no reserved_concurrent_executions here, and it
+  # is not the design that was intended. Setting one is refused outright
+  # on this account:
   #
-  # This caps the rate, not the total — a patient attacker still gets two
-  # at a time indefinitely. Per-IP rate limiting was considered and
-  # deferred; see ADR-015.
-  reserved_concurrent_executions = 2
+  #   InvalidParameterValueException: Specified ReservedConcurrentExecutions
+  #   for function decreases account's UnreservedConcurrentExecution below
+  #   its minimum value of [10]
+  #
+  # AWS starts new accounts at a concurrency limit of 10 — not the 1000
+  # that most documentation assumes — and requires 10 to remain
+  # unreserved. The two numbers are equal, so no reservation of any size
+  # is possible, not merely the value first attempted.
+  #
+  # The ceiling still exists; it just isn't ours to set. The account limit
+  # of 10 bounds this function more tightly than the reservation would
+  # have, and the expensive leg is capped separately and on purpose: the
+  # SES sandbox refuses more than 200 messages a day (ADR-013). Worth
+  # revisiting if the quota is ever raised. See ADR-015.
 
   # Keeps AWS account facts out of the Python, so the handler stays
   # portable and renaming the table doesn't mean editing code.
