@@ -37,10 +37,11 @@ No dependencies at any layer. Assertions guarding a security or cost control are
 
 ## Docs
 
-- [`docs/bootstrap.md`](docs/bootstrap.md) — the manual steps Terraform deliberately doesn't own, and why
-- [`docs/functional-requirements.md`](docs/functional-requirements.md) — what the site needs to do
-- [`docs/technical-requirements.md`](docs/technical-requirements.md) — how it's built
+- [`docs/project-report.md`](docs/project-report.md) — the write-up: what was built, why, and what went wrong
 - [`docs/decision-log.md`](docs/decision-log.md) — architecture decisions and reasoning
+- [`docs/bootstrap.md`](docs/bootstrap.md) — the manual steps Terraform deliberately doesn't own, and why
+- [`docs/technical-requirements.md`](docs/technical-requirements.md) — how it's built
+- [`docs/functional-requirements.md`](docs/functional-requirements.md) — what the site needs to do
 
 ## Deploy
 
