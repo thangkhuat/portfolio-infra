@@ -187,14 +187,76 @@ aws cloudtrail lookup-events --region ap-southeast-2 \
 
 The `userName` field is the exact subject claim. Diff it against the trust policy.
 
+## 6. SES recipient verification
+
+Terraform verifies the *sending domain* on its own: it publishes the `_amazonses` TXT record and
+the three DKIM CNAMEs into the Route 53 zone it already manages, and
+`aws_ses_domain_identity_verification` blocks until SES confirms. Nothing manual is involved, and
+that is exactly why domain verification was chosen over verifying a single address
+(see [ADR-013](decision-log.md)).
+
+The *recipient* is different. The account stays in the SES sandbox deliberately, which means mail
+is only delivered to verified addresses — so the notification recipient needs an identity of its
+own. Terraform creates it and SES sends a confirmation mail, but the link has to be clicked by
+hand. Terraform cannot read an inbox.
+
+After the first `terraform apply`, open the inbox for the address in
+`aws_ses_email_identity.notification_recipient` and click the link. Then confirm all three:
+
+```bash
+aws ses get-identity-verification-attributes --identities thangkhuat.dev --region ap-southeast-2
+aws ses get-identity-dkim-attributes        --identities thangkhuat.dev --region ap-southeast-2
+aws ses get-identity-verification-attributes --identities <recipient address> --region ap-southeast-2
+```
+
+All must read `Success`. Until the recipient does, **the form appears to work and no mail
+arrives** — the endpoint returns 200 and the submission is stored, because a SES failure is
+deliberately not treated as a failed submission. The evidence is in CloudWatch:
+
+```bash
+aws logs describe-log-streams --log-group-name /aws/lambda/portfolio-contact-form \
+  --region ap-southeast-2 --order-by LastEventTime --descending --limit 1
+```
+
+A healthy submission logs `Accepted submission <uuid>`. A failed send logs
+`Stored submission <uuid> but SES send failed` with the underlying error.
+
+**Adding a second recipient later takes two steps, not one.** Verify the new address, *and* add its
+identity ARN to the `SendNotification` statement in `main.tf`. SES authorizes `ses:SendEmail`
+against every identity involved in a call, so an unlisted recipient fails with `AccessDenied`
+naming that recipient's ARN — see [ADR-013](decision-log.md).
+
+## 7. Destroying: deletion protection on the submissions table
+
+`aws_dynamodb_table.contact_submissions` sets `deletion_protection_enabled = true`, because a
+submission is a message from someone that no `apply` can regenerate. The consequence is that
+**`terraform destroy` fails on that table** until the flag is turned off first:
+
+```bash
+# set deletion_protection_enabled = false in main.tf, then
+terraform apply
+terraform destroy
+```
+
+This is intended friction rather than an oversight — the extra step exists so that destroying real
+correspondence is a deliberate act. Export the table first if the contents matter:
+
+```bash
+aws dynamodb scan --table-name portfolio-contact-submissions --region ap-southeast-2 > submissions.json
+```
+
 ---
 
 ## Order of operations for a rebuild from zero
 
 1. IAM user + `PowerUserAccess` (§1), configure locally
-2. Inline OIDC policy on that user (§2)
+2. Inline IAM policy on that user (§2)
 3. `terraform init && terraform apply` — will pause at certificate validation
 4. Nameserver delegation at Porkbun (§3) — apply completes once DNS propagates
-5. `AWS_ROLE_ARN` and `CLOUDFRONT_DISTRIBUTION_ID` repository variables (§4)
-6. Confirm the repo and owner IDs in the trust policy match this repository (§5)
-7. Trigger **Actions → Deploy to S3 → Run workflow** on `main` to verify the deploy path
+5. Click the SES verification link sent to the notification recipient (§6)
+6. `AWS_ROLE_ARN` and `CLOUDFRONT_DISTRIBUTION_ID` repository variables (§4)
+7. Confirm the repo and owner IDs in the trust policy match this repository (§5)
+8. Trigger **Actions → Deploy to S3 → Run workflow** on `main` to verify the deploy path
+
+Step 5 sits after DNS delegation because SES cannot verify the domain until the zone is
+authoritative, and the recipient's confirmation mail is only sent once the identity exists.
