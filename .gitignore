@@ -7,6 +7,9 @@
 # every plan. Derived artifact — the source of truth is the .py file.
 build/
 
+# Bytecode written by the interpreter whenever the tests run.
+__pycache__/
+
 # Working notes kept for personal reference, not part of the published
 # project. Untracked deliberately — edit freely without it landing in a
 # commit.
