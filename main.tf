@@ -146,7 +146,7 @@ resource "aws_cloudfront_origin_access_control" "portfolio_oac" {
 
 resource "aws_cloudfront_distribution" "portfolio_cdn" {
   enabled             = true
-  default_root_object = "index.html" # served when visiting the bare domain with no path
+  default_root_object = "index.html"       # served when visiting the bare domain with no path
   aliases             = ["thangkhuat.dev"] # accept requests for the real domain, not just *.cloudfront.net
 
   origin {
@@ -176,9 +176,9 @@ resource "aws_cloudfront_distribution" "portfolio_cdn" {
 
   default_cache_behavior {
     allowed_methods        = ["GET", "HEAD"] # a static site is only ever read, never written to
-    cached_methods          = ["GET", "HEAD"]
-    target_origin_id        = "s3-portfolio-origin"
-    viewer_protocol_policy  = "redirect-to-https" # plain HTTP requests get bounced to HTTPS
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "s3-portfolio-origin"
+    viewer_protocol_policy = "redirect-to-https" # plain HTTP requests get bounced to HTTPS
 
     # ADR-007: nothing on this static site varies by query string
     # or cookie, so don't forward either — maximizes cache hit rate.
