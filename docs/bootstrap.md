@@ -13,7 +13,17 @@ the repository is public, and the same reasoning keeps it out of the deploy work
 ## 1. IAM user for Terraform
 
 Create an IAM user (this project uses `terraform-portfolio`), programmatic access only, with
-`PowerUserAccess` attached. Configure it locally with `aws configure`.
+`PowerUserAccess` attached. Configure it locally under a **named profile** matching the user:
+
+```bash
+aws configure --profile terraform-portfolio
+```
+
+The profile name isn't cosmetic — `main.tf` selects it explicitly through `var.aws_profile` rather
+than falling back to `[default]`, so Terraform can't quietly provision into whatever account the
+default credentials happen to point at. To use a different profile name, override it with
+`terraform apply -var aws_profile=<name>`; to fall back to the standard credential chain instead,
+pass `-var aws_profile=null`.
 
 Root credentials are never used for provisioning — see [ADR-005](decision-log.md) for the reasoning
 and the trade-off accepted in choosing a policy this broad.
