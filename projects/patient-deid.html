@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Patient De-Identification Pipeline — Thang Khuat</title>
-<meta name="description" content="Case study: an automated, auditable PHI de-identification pipeline on AWS — cost-derived confidence threshold, security-hardening pass, and 124 passing tests.">
+<meta name="description" content="Case study: an automated, auditable PHI de-identification pipeline on AWS — cost-derived confidence threshold, security-hardening pass, and 140 passing tests.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -180,7 +180,7 @@
     <p class="eyebrow">At a glance</p>
     <div class="stat-grid">
       <div class="stat-card">
-        <span class="num">124</span>
+        <span class="num">140</span>
         <span class="label">passing automated tests, run on every PR and push to main</span>
       </div>
       <div class="stat-card">
@@ -199,7 +199,7 @@
   <div class="wrap prose">
     <p class="eyebrow">Why it exists</p>
     <p>Healthcare has been the costliest industry for data breaches for over a decade, and most PHI exposure happens downstream of the originating hospital — through third-party vendors, analytics platforms, and AI pipelines that received the data secondhand. This pipeline sits at exactly that handoff point: making clinical text safe to share before it leaves the organization that holds it.</p>
-    <p>It deliberately does not try to build a better PHI detector than AWS already offers. AWS Comprehend Medical's <code>DetectPHI</code> does the entity detection. The engineering problem this project solves is everything around that call: a defensible confidence threshold, a regex backstop for a measured detection gap, an encrypted review path for low-confidence entities, and a security posture that's verified live rather than just written down.</p>
+    <p>It deliberately does not try to build a better PHI detector than AWS already offers. AWS Comprehend Medical's <code>DetectPHI</code> does the entity detection. The engineering problem this project solves is everything around that call: a defensible confidence threshold, a regex backstop for a measured detection gap, an encrypted review path for low-confidence entities, a way for the Operator who submitted a note to actually get it back, and a security posture that's verified live rather than just written down.</p>
   </div>
 </section>
 
@@ -210,17 +210,19 @@
       <pre>Browser (Operator)
       │ TLS
       ▼
-Upload Backend
-      │ TLS, PutObject only
+Upload Backend ──POST /upload──▶ input-notes bucket (SSE-KMS, Lambda-only)
+      │                                        │ S3 event
+      │                                        ▼
+      │                                Pipeline Lambda ──DetectPHI, TLS──▶ Comprehend Medical
+      │                                        │
+      │                    ┌───────────────────┴───────────────────┐
+      │                    ▼                                       ▼
+      │      redacted-output bucket (SSE-KMS)      review-artifacts bucket (client-side encrypted)
+      │                    │                                       │
+      └──GET /notes/{id}───┘                          kms:Decrypt  ▼
+      5-min presigned URL                                     Reviewer
       ▼
-input-notes bucket (SSE-KMS, Lambda-only)
-      │ S3 event
-      ▼
-Pipeline Lambda ──DetectPHI, TLS──▶ Comprehend Medical
-      │
-      ├──▶ redacted-output bucket (SSE-KMS, shareable) ──▶ Downstream consumer
-      │
-      └──▶ review-artifacts bucket (client-side encrypted) ──kms:Decrypt──▶ Reviewer</pre>
+Downstream consumer / Operator download</pre>
     </div>
   </div>
 </section>
@@ -233,6 +235,11 @@ Pipeline Lambda ──DetectPHI, TLS──▶ Comprehend Medical
       <div class="decision-card">
         <h3>Turning a stated principle into a number</h3>
         <p>The requirements said from day one that a missed identifier is a compliance failure and an over-redacted word is just noise — but that's a stance, not a threshold. It was resolved with a cost-sensitive formula, <code>t* = C_FP / (C_FP + C_FN)</code>, using a 1000x cost ratio grounded in Health Canada's clinical-anonymization guidance and confirmed against three rounds of corpus testing on the live API. The math resolves to <strong>0.001</strong> — and the calibration assumption that could break it is stated plainly rather than glossed over.</p>
+      </div>
+
+      <div class="decision-card">
+        <h3>Caught in review: Operators could submit but never collect a result</h3>
+        <p><code>POST /upload</code> returned 202 and nothing else — no identity the Operator held had read access to the redacted output. Closed with <code>GET /notes/{note_id}</code>: the frontend polls, then hands back a presigned download link that expires after 5 minutes. Content is deliberately never returned inline — a captured link goes stale; captured response text never does. The route reuses the existing Cognito authorizer rather than standing up a new identity-pool trust relationship just to hand browsers temporary AWS credentials, and a missing note and a still-processing one return the identical 404 so polling can't be used to confirm whether an ID was ever valid.</p>
       </div>
 
       <div class="decision-card">
@@ -262,7 +269,7 @@ Pipeline Lambda ──DetectPHI, TLS──▶ Comprehend Medical
 <section>
   <div class="wrap prose">
     <p class="eyebrow">Testing</p>
-    <p><strong>124 passed, 2 intentionally failing, 1 deselected</strong> on the latest verified CI run. The two <code>xfail(strict=True)</code> cases aren't slack in the suite — they pin a known Comprehend Medical limitation so the suite fails loudly, not silently, if AWS ever changes that upstream behaviour. Both handlers that previously had no coverage were checked for whether their tests could actually fail before being trusted, which caught a check that was verifying the wrong thing.</p>
+    <p><strong>140 passing tests</strong> on the latest verified run, including two intentionally-failing <code>xfail(strict=True)</code> cases that pin a known Comprehend Medical limitation so the suite fails loudly, not silently, if AWS ever changes that upstream behaviour. Both handlers that once had no coverage were checked for whether their tests could actually fail before being trusted — which caught a check that was verifying the wrong thing.</p>
     <h3>CI/CD</h3>
     <p>GitHub Actions runs the test suite on every PR and every push to <code>main</code>. From <code>main</code>, the Lambda functions deploy once those tests pass, and the frontend deploys through its own workflow — authenticated via OIDC, with no long-lived AWS keys stored anywhere. Infrastructure changes go through Terraform, by hand, never from CI.</p>
   </div>
@@ -275,6 +282,7 @@ Pipeline Lambda ──DetectPHI, TLS──▶ Comprehend Medical
       <li>The AU mobile regex backstop closes the <em>measured</em> formats; it doesn't address the underlying US-centric training bias in Comprehend Medical's phone detection more broadly.</li>
       <li>Comprehend Medical's <code>ADDRESS</code> entity type produces occasional false positives on phrases like "physiotherapy department" — accepted as noise, consistent with the FR-4 cost-ratio decision.</li>
       <li>The pipeline Lambda has no on-failure destination; a note that fails every retry is lost with only a CloudWatch error left behind. Recorded as the next item if this ever handles real production volume.</li>
+      <li>Note retrieval isn't ownership-checked: any authenticated Operator holding a note's ID can fetch that note's redacted output. The ID is an unguessable UUIDv4 returned only to the submitter, and the content is already meant for downstream release — a deliberate, stated trade-off, not an oversight.</li>
     </ul>
   </div>
 </section>
