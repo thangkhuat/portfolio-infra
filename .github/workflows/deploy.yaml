@@ -6,6 +6,7 @@ on:
     paths:
       - 'index.html'
       - 'assets/**' # the contact form's submit module
+      - 'projects/**' # per-project case-study pages
 
   # Lets the deploy be run by hand from the Actions tab. Useful for
   # verifying credentials or re-pushing the current file without having
@@ -65,13 +66,16 @@ jobs:
       # role deliberately does not have — its policy is exactly PutObject
       # plus CreateInvalidation (ADR-010). Widening it to save one line
       # would weaken the "worst case is defacement" property for no gain,
-      # since the site is two files. Revisit if assets/ ever grows enough
-      # that listing them here stops being reasonable.
+      # since the site is three files. Each new page needs its own line
+      # here as well as a path filter above. Revisit if assets/ or
+      # projects/ ever grows enough that listing them here stops being
+      # reasonable.
       - name: Deploy to S3
         run: |
           aws s3 cp index.html "s3://$SITE_BUCKET/index.html"
           aws s3 cp assets/contact-form.js "s3://$SITE_BUCKET/assets/contact-form.js" \
             --content-type "text/javascript"
+          aws s3 cp projects/patient-deid.html "s3://$SITE_BUCKET/projects/patient-deid.html"
 
       # Destroying and recreating the distribution assigns a new ID, so a
       # hardcoded copy would go on invalidating a distribution that no longer
