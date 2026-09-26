@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patient De-Identification Pipeline — Thang Khuat</title>
+<meta name="description" content="Case study: an automated, auditable PHI de-identification pipeline on AWS — cost-derived confidence threshold, security-hardening pass, and 124 passing tests.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F3F5F4;
+    --surface: #FFFFFF;
+    --ink: #12181A;
+    --ink-muted: #5B6663;
+    --accent: #2F6E62;
+    --accent-soft: #E3EEEC;
+    --line: #D9E0DD;
+    --max: 880px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { animation: none !important; transition: none !important; }
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+  section { padding: clamp(40px, 7vw, 72px) 0; }
+  section + section { border-top: 1px solid var(--line); }
+  h1, h2, h3 { font-family: 'IBM Plex Mono', monospace; margin: 0; }
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 16px;
+  }
+  .back { font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+
+  /* ---------- Header ---------- */
+  header.hero { padding-top: clamp(48px, 9vw, 96px); }
+  header.hero h1 {
+    font-size: clamp(28px, 4.5vw, 42px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-top: 10px;
+  }
+  .lede { max-width: 62ch; margin: 24px 0 0; font-size: 18px; }
+  .meta-row {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    margin-top: 28px;
+  }
+  .meta-row span {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-muted);
+    border: 1px solid var(--line);
+    padding: 5px 10px;
+    border-radius: 4px;
+  }
+
+  /* ---------- Stat strip ---------- */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .stat-card .num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 30px;
+    font-weight: 600;
+    color: var(--accent);
+    display: block;
+  }
+  .stat-card .label { font-size: 14px; color: var(--ink-muted); margin-top: 6px; }
+
+  /* ---------- Prose blocks ---------- */
+  .prose p { max-width: 68ch; margin: 0 0 18px; }
+  .prose p:last-child { margin-bottom: 0; }
+  .prose h2 { font-size: 20px; margin-bottom: 16px; }
+  .prose h3 { font-size: 16px; margin: 28px 0 10px; }
+  code {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.9em;
+    background: var(--accent-soft);
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+
+  /* ---------- Architecture diagram ---------- */
+  .diagram {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: clamp(20px, 4vw, 32px);
+    overflow-x: auto;
+  }
+  .diagram pre {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--ink);
+    margin: 0;
+    white-space: pre;
+  }
+
+  /* ---------- Decision cards ---------- */
+  .decision-list { display: grid; gap: 20px; }
+  .decision-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: clamp(20px, 3.5vw, 28px);
+  }
+  .decision-card h3 { font-size: 16px; margin: 0 0 10px; }
+  .decision-card p { max-width: 66ch; margin: 0; color: var(--ink); }
+  .decision-card p + p { margin-top: 10px; }
+
+  /* ---------- Limitations ---------- */
+  ul.limits { padding-left: 22px; max-width: 66ch; }
+  ul.limits li { margin-bottom: 10px; }
+
+  footer {
+    text-align: center;
+    padding: 28px 0 48px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+
+  @media (max-width: 640px) {
+    .stat-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="back"><a href="/#project">← Back to portfolio</a></p>
+    <p class="eyebrow">Case Study</p>
+    <h1>Patient De-Identification Pipeline</h1>
+    <p class="lede">An automated, auditable pipeline that redacts protected health information from clinical text against HIPAA's Safe Harbor standard — built to demonstrate secure operationalization of an existing detection engine, not novel PHI detection.</p>
+    <div class="meta-row">
+      <span>Python 3</span>
+      <span>boto3</span>
+      <span>AWS Comprehend Medical</span>
+      <span>Lambda</span>
+      <span>Cognito</span>
+      <span>CloudTrail</span>
+      <span>Terraform</span>
+      <span>GitHub Actions · OIDC</span>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">At a glance</p>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <span class="num">124</span>
+        <span class="label">passing automated tests, run on every PR and push to main</span>
+      </div>
+      <div class="stat-card">
+        <span class="num">0.001</span>
+        <span class="label">detection threshold, derived from a stated 1000x cost ratio — not guessed</span>
+      </div>
+      <div class="stat-card">
+        <span class="num">5</span>
+        <span class="label">independent IAM resource policies scoped to the same "confused deputy" pattern, recognized and reused</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap prose">
+    <p class="eyebrow">Why it exists</p>
+    <p>Healthcare has been the costliest industry for data breaches for over a decade, and most PHI exposure happens downstream of the originating hospital — through third-party vendors, analytics platforms, and AI pipelines that received the data secondhand. This pipeline sits at exactly that handoff point: making clinical text safe to share before it leaves the organization that holds it.</p>
+    <p>It deliberately does not try to build a better PHI detector than AWS already offers. AWS Comprehend Medical's <code>DetectPHI</code> does the entity detection. The engineering problem this project solves is everything around that call: a defensible confidence threshold, a regex backstop for a measured detection gap, an encrypted review path for low-confidence entities, and a security posture that's verified live rather than just written down.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">Architecture</p>
+    <div class="diagram">
+      <pre>Browser (Operator)
+      │ TLS
+      ▼
+Upload Backend
+      │ TLS, PutObject only
+      ▼
+input-notes bucket (SSE-KMS, Lambda-only)
+      │ S3 event
+      ▼
+Pipeline Lambda ──DetectPHI, TLS──▶ Comprehend Medical
+      │
+      ├──▶ redacted-output bucket (SSE-KMS, shareable) ──▶ Downstream consumer
+      │
+      └──▶ review-artifacts bucket (client-side encrypted) ──kms:Decrypt──▶ Reviewer</pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">Decisions worth knowing about</p>
+    <div class="decision-list">
+
+      <div class="decision-card">
+        <h3>Turning a stated principle into a number</h3>
+        <p>The requirements said from day one that a missed identifier is a compliance failure and an over-redacted word is just noise — but that's a stance, not a threshold. It was resolved with a cost-sensitive formula, <code>t* = C_FP / (C_FP + C_FN)</code>, using a 1000x cost ratio grounded in Health Canada's clinical-anonymization guidance and confirmed against three rounds of corpus testing on the live API. The math resolves to <strong>0.001</strong> — and the calibration assumption that could break it is stated plainly rather than glossed over.</p>
+      </div>
+
+      <div class="decision-card">
+        <h3>Closing a measured detection gap without replacing the engine</h3>
+        <p>Comprehend Medical is trained on US clinical text and phone formats. Measured directly: an Australian mobile number in spaced format comes back truncated, and in international format isn't detected at all. A regex backstop for AU mobile formats was layered in and unioned with the API's own entities — closing the measured gap, not attempting to out-detect AWS.</p>
+      </div>
+
+      <div class="decision-card">
+        <h3>One IAM pattern, recognized and reused five times</h3>
+        <p>S3 → pipeline Lambda, S3 → CloudFront, API Gateway → two separate backend Lambdas, and CloudTrail → its own log bucket all needed the same shape: a resource policy scoped to one caller ARN, not the broader service principal alone. Treating it as one recurring idiom — including resolving a genuine circular dependency on the fifth instance — is what let each subsequent case go in correctly the first time.</p>
+      </div>
+
+      <div class="decision-card">
+        <h3>A security fix corrected after review, not shipped wrong</h3>
+        <p>The first hardening pass removed a Cognito auth flow, reasoning it closed a refresh-token pathway. Checked against AWS's own documentation: that setting doesn't govern the API family this app actually uses. The real fix — cutting refresh-token lifetime from 30 days to 1 hour — was applied once that was understood, and the change record says so honestly rather than claiming the wrong fix worked.</p>
+      </div>
+
+      <div class="decision-card">
+        <h3>Audit logging, priced before it was built</h3>
+        <p>Every access-control layer governed whether someone <em>could</em> decrypt a flagged review entity; nothing recorded whether they actually did. CloudTrail pricing was checked against AWS's current rates before designing anything, then scoped narrowly on purpose — one bucket, read events only. Verified live: a real reviewer's access produced a log entry within 5 minutes.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap prose">
+    <p class="eyebrow">Testing</p>
+    <p><strong>124 passed, 2 intentionally failing, 1 deselected</strong> on the latest verified CI run. The two <code>xfail(strict=True)</code> cases aren't slack in the suite — they pin a known Comprehend Medical limitation so the suite fails loudly, not silently, if AWS ever changes that upstream behaviour. Both handlers that previously had no coverage were checked for whether their tests could actually fail before being trusted, which caught a check that was verifying the wrong thing.</p>
+    <h3>CI/CD</h3>
+    <p>GitHub Actions runs the test suite on every PR and every push to <code>main</code>. From <code>main</code>, the Lambda functions deploy once those tests pass, and the frontend deploys through its own workflow — authenticated via OIDC, with no long-lived AWS keys stored anywhere. Infrastructure changes go through Terraform, by hand, never from CI.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap prose">
+    <p class="eyebrow">Known limitations — documented, not hidden</p>
+    <ul class="limits">
+      <li>The AU mobile regex backstop closes the <em>measured</em> formats; it doesn't address the underlying US-centric training bias in Comprehend Medical's phone detection more broadly.</li>
+      <li>Comprehend Medical's <code>ADDRESS</code> entity type produces occasional false positives on phrases like "physiotherapy department" — accepted as noise, consistent with the FR-4 cost-ratio decision.</li>
+      <li>The pipeline Lambda has no on-failure destination; a note that fails every retry is lost with only a CloudWatch error left behind. Recorded as the next item if this ever handles real production volume.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">Code</p>
+    <p><a href="https://github.com/thangkhuat/patient-deid-pipeline" target="_blank" rel="noopener">View the repository on GitHub →</a></p>
+  </div>
+</section>
+
+<footer>Built on AWS · <a href="/">thangkhuat.dev</a></footer>
+
+</body>
+</html>

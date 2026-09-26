@@ -375,7 +375,7 @@
         <p class="proj-num">02 — Healthcare Data Privacy</p>
         <h2>Patient De-identification Pipeline</h2>
         <p>A Python pipeline that strips protected health information out of free-text clinical notes before that data can go anywhere else. AWS Comprehend Medical's <code>DetectPHI</code> does the entity detection; the pipeline applies HIPAA Safe Harbor–style de-identification on top, so PHI never leaves the boundary in the clear.</p>
-        <p>Built with the same care as the infrastructure above: 112 passing tests (plus two intentionally-failing cases marked <code>xfail(strict=True)</code>, pinning a known Comprehend Medical gap on Australian phone formats until AWS fixes it upstream) covering the detection and redaction logic against real clinical-note patterns, not just happy-path input.</p>
+        <p>Built with the same care as the infrastructure above: 124 passing tests (plus two intentionally-failing cases marked <code>xfail(strict=True)</code>, pinning a known Comprehend Medical gap on Australian phone formats, so the suite flags it if AWS ever changes that behaviour) covering the detection and redaction logic against real clinical-note patterns, not just happy-path input.</p>
         <div class="stack-row">
           <span>Python</span>
           <span>boto3</span>
@@ -384,6 +384,7 @@
           <span>HIPAA Safe Harbor</span>
         </div>
         <div class="project-links">
+          <a href="/projects/patient-deid.html">Read the case study →</a>
           <a href="https://github.com/thangkhuat/patient-deid-pipeline" target="_blank" rel="noopener">View the code on GitHub →</a>
         </div>
       </div>
