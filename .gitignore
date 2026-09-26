@@ -25,5 +25,5 @@ CLAUDE.md
 
 # Repomix dumps of the whole repo, generated for AI review. Duplicates
 # every tracked file, so it would double the repo if committed.
-repomix-output.md
+*repomix*.md
 md
