@@ -143,6 +143,7 @@
   }
 
   /* ---------- Project ---------- */
+  .project-list { display: grid; gap: 24px; }
   .project-card {
     background: var(--surface);
     border: 1px solid var(--line);
@@ -151,6 +152,21 @@
   }
   .project-card h2 { font-size: 22px; margin-bottom: 14px; }
   .project-card p { max-width: 62ch; color: var(--ink); }
+  .project-card .proj-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin: 0 0 8px;
+  }
+  .project-card code {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85em;
+    background: var(--accent-soft);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
   .stack-row {
     display: flex; flex-wrap: wrap; gap: 8px;
     margin: 20px 0 24px;
@@ -337,19 +353,39 @@
 
 <section id="project">
   <div class="wrap">
-    <p class="eyebrow">Project — This Site</p>
-    <div class="project-card">
-      <h2>This site is the first project.</h2>
-      <p>Every part of what you're looking at — the domain, the CDN, the certificate, the storage — is provisioned entirely through Terraform on AWS. No console clicking. The infrastructure is the portfolio piece, not just what it hosts.</p>
-      <div class="stack-row">
-        <span>Route 53</span>
-        <span>CloudFront</span>
-        <span>ACM</span>
-        <span>S3</span>
-        <span>IAM</span>
+    <p class="eyebrow">Projects</p>
+    <div class="project-list">
+      <div class="project-card">
+        <p class="proj-num">01 — This Site</p>
+        <h2>Portfolio Infrastructure</h2>
+        <p>Every part of what you're looking at — the domain, the CDN, the certificate, the storage — is provisioned entirely through Terraform on AWS. No console clicking. The infrastructure is the portfolio piece, not just what it hosts.</p>
+        <div class="stack-row">
+          <span>Route 53</span>
+          <span>CloudFront</span>
+          <span>ACM</span>
+          <span>S3</span>
+          <span>IAM</span>
+        </div>
+        <div class="project-links">
+          <a href="https://github.com/thangkhuat/portfolio-infra" target="_blank" rel="noopener">View the code on GitHub →</a>
+        </div>
       </div>
-      <div class="project-links">
-        <a href="https://github.com/thangkhuat/portfolio-infra" target="_blank" rel="noopener">View the code on GitHub →</a>
+
+      <div class="project-card">
+        <p class="proj-num">02 — Healthcare Data Privacy</p>
+        <h2>Patient De-identification Pipeline</h2>
+        <p>A Python pipeline that strips protected health information out of free-text clinical notes before that data can go anywhere else. AWS Comprehend Medical's <code>DetectPHI</code> does the entity detection; the pipeline applies HIPAA Safe Harbor–style de-identification on top, so PHI never leaves the boundary in the clear.</p>
+        <p>Built with the same care as the infrastructure above: 112 passing tests (plus two intentionally-failing cases marked <code>xfail(strict=True)</code>, pinning a known Comprehend Medical gap on Australian phone formats until AWS fixes it upstream) covering the detection and redaction logic against real clinical-note patterns, not just happy-path input.</p>
+        <div class="stack-row">
+          <span>Python</span>
+          <span>boto3</span>
+          <span>AWS Comprehend Medical</span>
+          <span>pytest</span>
+          <span>HIPAA Safe Harbor</span>
+        </div>
+        <div class="project-links">
+          <a href="https://github.com/thangkhuat/patient-deid-pipeline" target="_blank" rel="noopener">View the code on GitHub →</a>
+        </div>
       </div>
     </div>
   </div>

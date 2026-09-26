@@ -23,4 +23,7 @@ docs/session-log.md
 # disk and keeps working; simply isn't shipped with the repo.
 CLAUDE.md
 
+# Repomix dumps of the whole repo, generated for AI review. Duplicates
+# every tracked file, so it would double the repo if committed.
 repomix-output.md
+md
